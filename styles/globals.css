@@ -1,0 +1,110 @@
+@import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --app-bg: #f4f7fb;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  min-height: 100%;
+  background: var(--app-bg);
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  min-height: 100%;
+  margin: 0;
+  background:
+    radial-gradient(circle at top left, rgba(228, 35, 63, 0.08), transparent 34rem),
+    linear-gradient(180deg, #ffffff 0%, var(--app-bg) 46%, #eef3f8 100%);
+  color: #121826;
+  font-family: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: none;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button {
+  touch-action: manipulation;
+}
+
+::selection {
+  background: rgba(228, 35, 63, 0.18);
+}
+
+.ios-scroll {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+.safe-top {
+  padding-top: calc(16px + var(--safe-top));
+}
+
+.safe-bottom {
+  padding-bottom: calc(88px + var(--safe-bottom));
+}
+
+.bottom-safe {
+  padding-bottom: var(--safe-bottom);
+}
+
+.text-balance {
+  text-wrap: balance;
+}
+
+.glass-surface {
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.78);
+  box-shadow: 0 18px 50px rgba(15, 39, 68, 0.1);
+  backdrop-filter: blur(18px);
+}
+
+.shimmer-line {
+  background: linear-gradient(90deg, #718199 0%, #172942 28%, #e4233f 50%, #172942 72%, #718199 100%);
+  background-size: 220% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.light-sweep {
+  position: relative;
+  overflow: hidden;
+}
+
+.light-sweep::after {
+  content: "";
+  position: absolute;
+  inset: -40% auto -40% -45%;
+  width: 38%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.48), transparent);
+  animation: lightSweep 1.7s ease-in-out infinite;
+}
+
+.hide-scrollbar {
+  scrollbar-width: none;
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}

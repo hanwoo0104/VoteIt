@@ -1,0 +1,11 @@
+<svg width="390" height="844" viewBox="0 0 390 844" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="390" height="844" fill="#F4F7FB"/>
+  <rect x="20" y="102" width="350" height="420" rx="16" fill="#E8ECF1"/>
+  <text x="38" y="144" fill="#111827" font-family="Arial, sans-serif" font-size="20" font-weight="800">오늘 핫한 주제</text>
+  <rect x="38" y="266" width="314" height="52" rx="8" fill="#2D5A88"/>
+  <rect x="38" y="330" width="314" height="52" rx="8" fill="#B93B4C"/>
+  <rect x="38" y="394" width="314" height="52" rx="8" fill="#2D5A88"/>
+  <rect x="20" y="540" width="165" height="190" rx="10" fill="#244868"/>
+  <rect x="205" y="540" width="165" height="190" rx="10" fill="#244868"/>
+  <rect x="0" y="770" width="390" height="74" fill="white"/>
+</svg>
