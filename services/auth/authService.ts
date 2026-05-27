@@ -1,11 +1,15 @@
-import { supabase, isSupabaseConfigured } from "@/services/supabase/client";
-import type { Demographics, UserProfile, UserRole } from "@/types";
+import { getSupabaseClient, supabase } from "@/services/supabase/client";
+import { runSupabaseQuery } from "@/services/supabase/query";
+import { phoneToAuthEmail, normalizePhone } from "@/services/auth/phone";
+import { withTimeout } from "@/lib/async";
+import type { Demographics, UserProfile } from "@/types";
 
 export interface SignUpPayload extends Demographics {
   name: string;
   nickname: string;
   phone: string;
   password: string;
+  verificationId: string;
 }
 
 export interface LoginPayload {
@@ -18,139 +22,121 @@ export interface AuthResult {
   accessToken: string;
 }
 
-const demoProfiles: Array<UserProfile & { password: string }> = [
-  {
-    id: "demo-user",
-    name: "해커톤",
-    nickname: "시민데모",
-    phone: "010-1234-5678",
-    password: "voteit1234!",
-    role: "user",
-    gender: "other",
-    ageGroup: "30대",
-    region: "서울",
-    incomeLevel: "200-400만원",
-    createdAt: new Date().toISOString()
-  },
-  {
-    id: "demo-admin",
-    name: "관리자",
-    nickname: "보팃운영",
-    phone: "010-0000-0000",
-    password: "admin1234!",
-    role: "admin",
-    gender: "other",
-    ageGroup: "30대",
-    region: "서울",
-    incomeLevel: "400-700만원",
-    createdAt: new Date().toISOString()
-  },
-  {
-    id: "demo-politician",
-    name: "정치인",
-    nickname: "정책답변자",
-    phone: "010-9999-9999",
-    password: "pol1234!",
-    role: "politician",
-    gender: "other",
-    ageGroup: "40대",
-    region: "대전",
-    incomeLevel: "700만원 이상",
-    createdAt: new Date().toISOString()
-  }
-];
+interface UserRow {
+  id: string;
+  phone: string;
+  role: UserProfile["role"];
+  created_at: string;
+}
 
-function toProfile(payload: SignUpPayload, role: UserRole = "user"): UserProfile {
+interface ProfileRow {
+  id: string;
+  name: string;
+  nickname: string;
+  gender: UserProfile["gender"];
+  age_group: UserProfile["ageGroup"];
+  region: string;
+  income_level: UserProfile["incomeLevel"];
+  avatar_url?: string | null;
+}
+
+async function parseJson<T>(response: Response): Promise<T> {
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(body.error ?? "요청 처리에 실패했습니다.");
+  }
+  return body as T;
+}
+
+export async function fetchProfile(userId: string): Promise<UserProfile> {
+  const client = getSupabaseClient();
+  const [{ data: userRow, error: userError }, { data: profileRow, error: profileError }] = await Promise.all([
+    runSupabaseQuery(client.from("users").select("id, phone, role, created_at").eq("id", userId).single<UserRow>(), "사용자"),
+    runSupabaseQuery(
+      client
+        .from("profiles")
+        .select("id, name, nickname, gender, age_group, region, income_level, avatar_url")
+        .eq("id", userId)
+        .single<ProfileRow>(),
+      "프로필"
+    )
+  ]);
+
+  if (userError) throw new Error(userError.message);
+  if (profileError) throw new Error(profileError.message);
+  if (!userRow || !profileRow) throw new Error("사용자 프로필을 찾을 수 없습니다.");
+
   return {
-    id: `local-${crypto.randomUUID()}`,
-    name: payload.name,
-    nickname: payload.nickname,
-    phone: payload.phone,
-    role,
-    gender: payload.gender,
-    ageGroup: payload.ageGroup,
-    region: payload.region,
-    incomeLevel: payload.incomeLevel,
-    createdAt: new Date().toISOString()
+    id: userRow.id,
+    name: profileRow.name,
+    nickname: profileRow.nickname,
+    phone: userRow.phone,
+    role: userRow.role,
+    gender: profileRow.gender,
+    ageGroup: profileRow.age_group,
+    region: profileRow.region,
+    incomeLevel: profileRow.income_level,
+    avatarUrl: profileRow.avatar_url ?? undefined,
+    createdAt: userRow.created_at
   };
 }
 
 export async function signUpWithAuth(payload: SignUpPayload): Promise<AuthResult> {
-  if (isSupabaseConfigured && supabase) {
-    const { data, error } = await supabase.auth.signUp({
-      phone: payload.phone,
-      password: payload.password,
-      options: {
-        data: {
-          name: payload.name,
-          nickname: payload.nickname,
-          role: "user",
-          gender: payload.gender,
-          age_group: payload.ageGroup,
-          region: payload.region,
-          income_level: payload.incomeLevel
-        }
-      }
-    });
+  await parseJson<{ userId: string }>(
+    await withTimeout(
+      fetch("/api/auth/signup", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          ...payload,
+          phone: normalizePhone(payload.phone)
+        })
+      }),
+      "회원가입"
+    )
+  );
 
-    if (error) throw new Error(error.message);
-
-    const user = toProfile(payload);
-    user.id = data.user?.id ?? user.id;
-    return {
-      user,
-      accessToken: data.session?.access_token ?? `supabase-pending-${user.id}`
-    };
-  }
-
-  const user = toProfile(payload);
-  return {
-    user,
-    accessToken: `local-session-${user.id}`
-  };
+  return loginWithAuth({
+    phone: payload.phone,
+    password: payload.password
+  });
 }
 
 export async function loginWithAuth(payload: LoginPayload): Promise<AuthResult> {
-  if (isSupabaseConfigured && supabase) {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      phone: payload.phone,
+  const client = getSupabaseClient();
+  const { data, error } = await withTimeout(
+    client.auth.signInWithPassword({
+      email: phoneToAuthEmail(payload.phone),
       password: payload.password
-    });
+    }),
+    "로그인"
+  );
 
-    if (error) throw new Error(error.message);
+  if (error) throw new Error(error.message);
+  if (!data.user || !data.session) throw new Error("세션을 만들지 못했습니다.");
 
-    const metadata = data.user.user_metadata;
-    return {
-      user: {
-        id: data.user.id,
-        name: metadata.name ?? "VoteIt 사용자",
-        nickname: metadata.nickname ?? "시민",
-        phone: payload.phone,
-        role: metadata.role ?? "user",
-        gender: metadata.gender ?? "other",
-        ageGroup: metadata.age_group ?? "30대",
-        region: metadata.region ?? "서울",
-        incomeLevel: metadata.income_level ?? "200-400만원",
-        createdAt: data.user.created_at
-      },
-      accessToken: data.session?.access_token ?? ""
-    };
-  }
-
-  await new Promise((resolve) => setTimeout(resolve, 350));
-  const match = demoProfiles.find((profile) => profile.phone === payload.phone && profile.password === payload.password);
-  if (!match) {
-    throw new Error("휴대폰 번호 또는 비밀번호를 확인해 주세요.");
-  }
-  const { password: _password, ...user } = match;
   return {
-    user,
-    accessToken: `local-session-${match.id}`
+    user: await fetchProfile(data.user.id),
+    accessToken: data.session.access_token
+  };
+}
+
+export async function loadCurrentAuth(): Promise<AuthResult | null> {
+  if (!supabase) return null;
+
+  const { data, error } = await withTimeout(supabase.auth.getSession(), "세션 확인");
+  if (error) throw new Error(error.message);
+  if (!data.session?.user) return null;
+
+  return {
+    user: await fetchProfile(data.session.user.id),
+    accessToken: data.session.access_token
   };
 }
 
 export async function signOutWithAuth() {
-  if (isSupabaseConfigured && supabase) {
-    await supabase.auth.signOut();
-  }
+  const client = getSupabaseClient();
+  await client.auth.signOut();
 }

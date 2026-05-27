@@ -29,6 +29,7 @@ export interface NewsLink {
 
 export interface Politician {
   id: string;
+  userId?: string | null;
   name: string;
   party: string;
   role: string;
@@ -51,6 +52,8 @@ export interface IssueOption {
   pros: string[];
   cons: string[];
   percent: number;
+  votesCount: number;
+  sortOrder: number;
 }
 
 export interface BreakdownPoint {
@@ -75,18 +78,21 @@ export interface CommentAuthor {
 export interface Comment {
   id: string;
   issueId: string;
-  parentId?: string;
+  parentId?: string | null;
   author: CommentAuthor;
   body: string;
   likes: number;
   likedByMe?: boolean;
   reported?: boolean;
   createdAt: string;
+  updatedAt?: string;
+  edited?: boolean;
   replies: Comment[];
 }
 
 export interface Issue {
   id: string;
+  slug: string;
   title: string;
   summary: string;
   description: string;
@@ -99,7 +105,6 @@ export interface Issue {
   newsLinks: NewsLink[];
   options: IssueOption[];
   statistics: Record<string, IssueStatistics>;
-  comments: Comment[];
 }
 
 export interface ChatMessage {
@@ -115,6 +120,7 @@ export interface ChatRoom {
   id: string;
   userId: string;
   politicianId: string;
+  politician?: Politician;
   lastMessage: string;
   lastMessageAt: string;
   unreadCount: number;
@@ -129,3 +135,5 @@ export interface AIAnalysis {
   politicianNotes: string[];
   closing: string;
 }
+
+export type CommentSort = "latest" | "likes";

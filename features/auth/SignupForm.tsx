@@ -10,7 +10,8 @@ import { Logo } from "@/components/common/Logo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
-import { requestDummyOtp, verifyDummyOtp } from "@/services/auth/dummyOtp";
+import { requestSignupOtp, verifySignupOtp } from "@/services/auth/otp";
+import { isSupabaseConfigured } from "@/services/supabase/client";
 import { useAuthStore } from "@/stores/authStore";
 import type { AgeGroup, Gender, IncomeLevel } from "@/types";
 
@@ -23,9 +24,11 @@ export function SignupForm() {
   const signup = useAuthStore((state) => state.signup);
   const loading = useAuthStore((state) => state.loading);
   const [step, setStep] = useState<"profile" | "otp">("profile");
-  const [otp, setOtp] = useState("123456");
+  const [otp, setOtp] = useState("");
   const [otpHint, setOtpHint] = useState("");
   const [error, setError] = useState("");
+  const [verificationId, setVerificationId] = useState("");
+  const [otpVerified, setOtpVerified] = useState(false);
   const [form, setForm] = useState({
     name: "",
     nickname: "",
@@ -46,19 +49,24 @@ export function SignupForm() {
       setError("이름, 닉네임, 휴대폰 번호와 8자 이상 비밀번호를 입력해 주세요.");
       return;
     }
-    const result = await requestDummyOtp(form.phone);
-    setOtpHint(`데모 인증번호는 ${result.devCode} 입니다.`);
+    const result = await requestSignupOtp(form.phone);
+    setVerificationId(result.verificationId);
+    setOtpVerified(false);
+    setOtp("");
+    setOtpHint(
+      result.devCode
+        ? `개발 환경 인증번호는 ${result.devCode} 입니다.`
+        : `인증번호를 발송했습니다. ${new Date(result.expiresAt).toLocaleTimeString("ko-KR")}까지 입력해 주세요.`
+    );
     setStep("otp");
   };
 
   const finish = async () => {
     setError("");
-    const ok = await verifyDummyOtp(otp);
-    if (!ok) {
-      setError("인증번호가 맞지 않아요. 데모 코드는 123456 입니다.");
-      return;
-    }
-    await signup(form);
+    const result = await verifySignupOtp(verificationId, otp);
+    if (!result.verified) return;
+    setOtpVerified(true);
+    await signup({ ...form, verificationId: result.verificationId });
     router.push("/");
   };
 
@@ -67,8 +75,17 @@ export function SignupForm() {
       <div className="mb-8">
         <Logo />
         <h1 className="mt-8 text-3xl font-black leading-tight text-vote-ink">의견을 더 정확히 비교하기 위한 기본 정보</h1>
-        <p className="mt-3 text-sm leading-relaxed text-slate-500">통계는 익명화된 집계로만 사용됩니다. 휴대폰 인증은 더미 OTP UI로 분리되어 있어 실제 SMS로 교체할 수 있어요.</p>
+        <p className="mt-3 text-sm leading-relaxed text-slate-500">통계는 익명화된 집계로만 사용됩니다. 인증번호는 DB에 만료 시간과 함께 저장되고, SMS 발송 어댑터만 교체하면 실제 문자로 전환됩니다.</p>
       </div>
+
+      {!isSupabaseConfigured ? (
+        <div className="mb-5 rounded-3xl border border-vote-red/10 bg-vote-red/10 p-4">
+          <p className="text-sm font-black text-vote-ink">Supabase 환경변수가 필요해요</p>
+          <p className="mt-1 text-xs leading-relaxed text-slate-600">
+            OTP와 회원가입은 실제 DB에 저장되므로 `.env.local` 설정 후 사용할 수 있습니다.
+          </p>
+        </div>
+      ) : null}
 
       {step === "profile" ? (
         <motion.form initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} onSubmit={requestOtp} className="space-y-4 rounded-3xl bg-white p-5 shadow-soft">
@@ -115,7 +132,7 @@ export function SignupForm() {
             </Select>
           </Field>
           {error ? <p className="text-sm font-semibold text-vote-red">{error}</p> : null}
-          <Button type="submit" variant="primary" size="lg" className="w-full">
+          <Button type="submit" variant="primary" size="lg" className="w-full" disabled={!isSupabaseConfigured}>
             <MessageSquareText className="h-5 w-5" />
             OTP 인증하기
           </Button>
@@ -128,14 +145,26 @@ export function SignupForm() {
             </div>
             <div>
               <p className="font-black text-vote-ink">휴대폰 인증</p>
-              <p className="text-sm font-medium text-slate-500">{otpHint}</p>
+          <p className="text-sm font-medium text-slate-500">{otpHint}</p>
             </div>
           </div>
           <Input inputMode="numeric" value={otp} onChange={(event) => setOtp(event.target.value)} className="text-center text-xl font-black tracking-[0.35em]" maxLength={6} />
           {error ? <p className="mt-3 text-sm font-semibold text-vote-red">{error}</p> : null}
           <Button variant="primary" size="lg" className="mt-5 w-full" onClick={finish} disabled={loading}>
             <CheckCircle2 className="h-5 w-5" />
-            {loading ? "가입 중..." : "인증 완료하고 시작"}
+            {loading ? "가입 중..." : otpVerified ? "인증 완료" : "인증 완료하고 시작"}
+          </Button>
+          <Button
+            variant="soft"
+            className="mt-2 w-full"
+            onClick={async () => {
+              const result = await requestSignupOtp(form.phone);
+              setVerificationId(result.verificationId);
+              setOtp("");
+              setOtpHint(result.devCode ? `개발 환경 인증번호는 ${result.devCode} 입니다.` : "인증번호를 다시 발송했습니다.");
+            }}
+          >
+            인증번호 재전송
           </Button>
           <Button variant="ghost" className="mt-2 w-full" onClick={() => setStep("profile")}>
             정보 수정

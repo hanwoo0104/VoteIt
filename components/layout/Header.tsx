@@ -17,7 +17,7 @@ export function Header({ compact = false }: { compact?: boolean }) {
       className="flex items-center justify-between px-5 pb-3 pt-[calc(22px+env(safe-area-inset-top))]"
     >
       <Link href="/" aria-label="VoteIt 홈">
-        <Logo className={compact ? "text-[28px]" : undefined} />
+        <Logo className={compact ? "w-[82px]" : undefined} />
       </Link>
       <div className="flex items-center gap-2">
         {user?.role === "admin" ? (

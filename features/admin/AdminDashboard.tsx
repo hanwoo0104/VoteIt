@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Eye, Flame, MessageCircleWarning, Pencil, Plus, Save, Trash2, UsersRound } from "lucide-react";
 import { motion } from "framer-motion";
 import { AppShell } from "@/components/layout/AppShell";
@@ -10,93 +10,156 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { issues, politicians } from "@/services/data/mockData";
+import { ShimmerLoader } from "@/components/ui/skeleton";
+import { ErrorState } from "@/components/ui/state";
+import { RequireAuth } from "@/features/auth/RequireAuth";
+import {
+  deleteAdminIssue,
+  fetchAdminStats,
+  fetchPendingReports,
+  resolveReport,
+  upsertAdminIssue,
+  type AdminIssueInput,
+  type AdminIssueOptionInput
+} from "@/services/admin/adminService";
+import { fetchPoliticians } from "@/services/chat/chatService";
+import { useIssues } from "@/hooks/useIssues";
 import { useAuthStore } from "@/stores/authStore";
-import { useCommentStore } from "@/stores/commentStore";
 import { formatNumber } from "@/lib/utils";
+import type { Issue, Politician } from "@/types";
 
-interface AdminOption {
-  title: string;
-  pros: string;
-  cons: string;
-  politicianId: string;
-}
+type DraftIssue = AdminIssueInput;
 
-interface AdminIssue {
-  id: string;
-  title: string;
-  summary: string;
-  hot: boolean;
-  published: boolean;
-  newsTitle: string;
-  newsUrl: string;
-  options: AdminOption[];
-}
-
-const emptyIssue = (): AdminIssue => ({
-  id: `draft-${Date.now()}`,
+const emptyDraft = (): DraftIssue => ({
+  slug: "",
   title: "",
   summary: "",
+  description: "",
   hot: false,
   published: true,
   newsTitle: "",
+  newsOutlet: "VoteIt",
   newsUrl: "",
   options: Array.from({ length: 4 }).map(() => ({
     title: "",
-    pros: "",
-    cons: "",
-    politicianId: politicians[0]?.id ?? ""
+    shortText: "",
+    partyAlignment: "",
+    difference: "",
+    pros: [],
+    cons: [],
+    politicianId: ""
   }))
 });
 
-const initialAdminIssues: AdminIssue[] = issues.map((issue) => ({
-  id: issue.id,
-  title: issue.title,
-  summary: issue.summary,
-  hot: issue.hot,
-  published: issue.published,
-  newsTitle: issue.newsLinks[0]?.title ?? "",
-  newsUrl: issue.newsLinks[0]?.url ?? "",
-  options: issue.options.map((option) => ({
-    title: option.title,
-    pros: option.pros.join("\n"),
-    cons: option.cons.join("\n"),
-    politicianId: option.politicianIds[0] ?? politicians[0]?.id ?? ""
-  }))
-}));
+function issueToDraft(issue: Issue): DraftIssue {
+  const baseOptions = emptyDraft().options;
+  const options = Array.from({ length: 4 }).map((_, index) => {
+    const option = issue.options[index];
+    if (!option) return baseOptions[index];
+
+    return {
+      id: option.id,
+      title: option.title,
+      shortText: option.shortText,
+      partyAlignment: option.partyAlignment,
+      difference: option.difference,
+      pros: option.pros,
+      cons: option.cons,
+      politicianId: option.politicianIds[0] ?? ""
+    };
+  });
+
+  return {
+    id: issue.id,
+    slug: issue.slug,
+    title: issue.title,
+    summary: issue.summary,
+    description: issue.description,
+    hot: issue.hot,
+    published: issue.published,
+    newsTitle: issue.newsLinks[0]?.title ?? "",
+    newsOutlet: issue.newsLinks[0]?.outlet ?? "VoteIt",
+    newsUrl: issue.newsLinks[0]?.url ?? "",
+    options
+  };
+}
 
 export function AdminDashboard() {
+  return (
+    <RequireAuth>
+      <AdminContent />
+    </RequireAuth>
+  );
+}
+
+function AdminContent() {
   const user = useAuthStore((state) => state.user);
-  const setDemoRole = useAuthStore((state) => state.setDemoRole);
-  const [adminIssues, setAdminIssues] = useState(initialAdminIssues);
-  const [selectedId, setSelectedId] = useState(adminIssues[0]?.id ?? "new");
-  const selected = adminIssues.find((issue) => issue.id === selectedId) ?? emptyIssue();
-  const commentsByIssue = useCommentStore((state) => state.commentsByIssue);
+  const { data: issues, loading, error, reload } = useIssues();
+  const [politicians, setPoliticians] = useState<Politician[]>([]);
+  const [selectedId, setSelectedId] = useState("new");
+  const [draft, setDraft] = useState<DraftIssue>(emptyDraft());
+  const [stats, setStats] = useState({ users: 0, participants: 0, reports: 0, hot: 0 });
+  const [reports, setReports] = useState<Array<Record<string, unknown>>>([]);
+  const [saving, setSaving] = useState(false);
+  const [adminError, setAdminError] = useState("");
 
-  const reportedComments = useMemo(() => {
-    return Object.values(commentsByIssue)
-      .flat()
-      .filter((comment) => comment.reported);
-  }, [commentsByIssue]);
+  const selectedIssue = useMemo(() => issues?.find((issue) => issue.id === selectedId), [issues, selectedId]);
 
-  const totals = {
-    users: 12840,
-    participants: issues.reduce((sum, issue) => sum + issue.participants, 0),
-    reports: reportedComments.length,
-    hot: adminIssues.filter((issue) => issue.hot).length
+  useEffect(() => {
+    if (selectedId === "new") setDraft(emptyDraft());
+    if (selectedIssue) setDraft(issueToDraft(selectedIssue));
+  }, [selectedId, selectedIssue]);
+
+  const loadAdmin = async () => {
+    if (user?.role !== "admin") return;
+    setAdminError("");
+    try {
+      const [loadedStats, loadedPoliticians, loadedReports] = await Promise.all([
+        fetchAdminStats(),
+        fetchPoliticians(),
+        fetchPendingReports()
+      ]);
+      setStats(loadedStats);
+      setPoliticians(loadedPoliticians);
+      setReports(loadedReports as Array<Record<string, unknown>>);
+    } catch (caught) {
+      setAdminError(caught instanceof Error ? caught.message : "관리자 데이터를 불러오지 못했습니다.");
+    }
   };
 
-  const saveIssue = (issue: AdminIssue) => {
-    setAdminIssues((current) => {
-      const exists = current.some((item) => item.id === issue.id);
-      return exists ? current.map((item) => (item.id === issue.id ? issue : item)) : [issue, ...current];
-    });
-    setSelectedId(issue.id);
+  useEffect(() => {
+    loadAdmin();
+  }, [user?.role]);
+
+  const save = async () => {
+    setSaving(true);
+    setAdminError("");
+    try {
+      const savedIssue = await upsertAdminIssue({
+        ...draft,
+        slug: draft.slug || draft.title.toLowerCase().replace(/\s+/g, "-")
+      });
+      setSelectedId(savedIssue.id);
+      await Promise.all([reload(), loadAdmin()]);
+    } catch (caught) {
+      setAdminError(caught instanceof Error ? caught.message : "저장에 실패했습니다.");
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const removeIssue = (issueId: string) => {
-    setAdminIssues((current) => current.filter((issue) => issue.id !== issueId));
-    setSelectedId("new");
+  const remove = async () => {
+    if (!draft.id) return;
+    setSaving(true);
+    try {
+      await deleteAdminIssue(draft.id);
+      setSelectedId("new");
+      await Promise.all([reload(), loadAdmin()]);
+    } catch (caught) {
+      setAdminError(caught instanceof Error ? caught.message : "삭제에 실패했습니다.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   if (user?.role !== "admin") {
@@ -104,12 +167,9 @@ export function AdminDashboard() {
       <AppShell wide showBottomNav={false} className="px-5 py-8">
         <div className="mx-auto max-w-lg rounded-3xl bg-white p-6 text-center shadow-soft">
           <h1 className="text-2xl font-black text-vote-ink">관리자 권한이 필요해요</h1>
-          <p className="mt-2 text-sm leading-relaxed text-slate-500">해커톤 시연용으로 관리자 계정 전환을 바로 사용할 수 있습니다.</p>
-          <Button variant="primary" size="lg" className="mt-5 w-full" onClick={() => setDemoRole("admin")}>
-            관리자 데모 시작
-          </Button>
+          <p className="mt-2 text-sm leading-relaxed text-slate-500">관리자 계정으로 로그인해야 운영 기능을 사용할 수 있습니다.</p>
           <Link href="/login">
-            <Button variant="outline" size="lg" className="mt-2 w-full">
+            <Button variant="primary" size="lg" className="mt-5 w-full">
               로그인 페이지
             </Button>
           </Link>
@@ -124,7 +184,7 @@ export function AdminDashboard() {
         <div>
           <Badge className="bg-vote-red/10 text-vote-red">Admin</Badge>
           <h1 className="mt-3 text-3xl font-black text-vote-ink md:text-4xl">관리자 대시보드</h1>
-          <p className="mt-2 text-sm font-medium text-slate-500">현안, 의견 4개, 장단점, 정치인 연결, 뉴스 링크, 신고 관리를 한 곳에서 처리합니다.</p>
+          <p className="mt-2 text-sm font-medium text-slate-500">현안, 의견, 뉴스, 신고, 통계를 실제 DB 기준으로 운영합니다.</p>
         </div>
         <div className="flex gap-2">
           <Button variant="soft" onClick={() => setSelectedId("new")}>
@@ -137,15 +197,19 @@ export function AdminDashboard() {
       </div>
 
       <section className="mb-6 grid gap-3 md:grid-cols-4">
-        <Metric icon={UsersRound} label="사용자 수" value={formatNumber(totals.users)} />
-        <Metric icon={Eye} label="현안 참여 수" value={formatNumber(totals.participants)} />
-        <Metric icon={MessageCircleWarning} label="댓글 신고" value={`${totals.reports}`} />
-        <Metric icon={Flame} label="핫이슈" value={`${totals.hot}`} />
+        <Metric icon={UsersRound} label="사용자 수" value={formatNumber(stats.users)} />
+        <Metric icon={Eye} label="현안 참여 수" value={formatNumber(stats.participants)} />
+        <Metric icon={MessageCircleWarning} label="댓글 신고" value={`${stats.reports}`} />
+        <Metric icon={Flame} label="핫이슈" value={`${stats.hot}`} />
       </section>
 
-      <div className="grid gap-5 lg:grid-cols-[360px_1fr]">
+      {adminError ? <ErrorState description={adminError} onRetry={loadAdmin} /> : null}
+      {loading ? <ShimmerLoader text="운영 데이터를 불러오는 중..." /> : null}
+      {error ? <ErrorState description={error} onRetry={reload} /> : null}
+
+      <div className="mt-5 grid gap-5 lg:grid-cols-[360px_1fr]">
         <section className="space-y-3">
-          {adminIssues.map((issue) => (
+          {(issues ?? []).map((issue) => (
             <motion.button
               key={issue.id}
               layout
@@ -167,19 +231,34 @@ export function AdminDashboard() {
           ))}
         </section>
 
-        <IssueEditor key={selectedId} issue={selectedId === "new" ? emptyIssue() : selected} onSave={saveIssue} onDelete={removeIssue} />
+        <IssueEditor
+          draft={draft}
+          politicians={politicians}
+          saving={saving}
+          onChange={setDraft}
+          onSave={save}
+          onDelete={remove}
+        />
       </div>
 
       <section className="mt-6 rounded-3xl bg-white p-5 shadow-soft">
         <h2 className="text-xl font-black text-vote-ink">댓글 신고 관리</h2>
-        {reportedComments.length === 0 ? (
-          <p className="mt-3 rounded-2xl bg-slate-50 p-4 text-sm font-semibold text-slate-500">현재 신고된 댓글이 없습니다.</p>
+        {reports.length === 0 ? (
+          <p className="mt-3 rounded-2xl bg-slate-50 p-4 text-sm font-semibold text-slate-500">현재 처리 대기 신고가 없습니다.</p>
         ) : (
           <div className="mt-3 space-y-2">
-            {reportedComments.map((comment) => (
-              <div key={comment.id} className="rounded-2xl bg-vote-red/10 p-4">
-                <p className="text-sm font-bold text-vote-ink">{comment.author.nickname}</p>
-                <p className="mt-1 text-sm text-slate-600">{comment.body}</p>
+            {reports.map((report) => (
+              <div key={String(report.id)} className="rounded-2xl bg-vote-red/10 p-4">
+                <p className="text-sm font-bold text-vote-ink">신고 사유: {String(report.reason ?? "user_report")}</p>
+                <p className="mt-1 text-sm text-slate-600">{String((report.comments as { body?: string } | null)?.body ?? "")}</p>
+                <div className="mt-3 flex gap-2">
+                  <Button size="sm" variant="primary" onClick={() => resolveReport(String(report.id), "resolved").then(loadAdmin)}>
+                    처리 완료
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => resolveReport(String(report.id), "dismissed").then(loadAdmin)}>
+                    기각
+                  </Button>
+                </div>
               </div>
             ))}
           </div>
@@ -200,33 +279,38 @@ function Metric({ icon: Icon, label, value }: { icon: typeof UsersRound; label: 
 }
 
 function IssueEditor({
-  issue,
+  draft,
+  politicians,
+  saving,
+  onChange,
   onSave,
   onDelete
 }: {
-  issue: AdminIssue;
-  onSave: (issue: AdminIssue) => void;
-  onDelete: (issueId: string) => void;
+  draft: DraftIssue;
+  politicians: Politician[];
+  saving: boolean;
+  onChange: (draft: DraftIssue) => void;
+  onSave: () => void;
+  onDelete: () => void;
 }) {
-  const [draft, setDraft] = useState(issue);
-  const setOption = (index: number, patch: Partial<AdminOption>) => {
-    setDraft((current) => ({
-      ...current,
-      options: current.options.map((option, optionIndex) => (optionIndex === index ? { ...option, ...patch } : option))
-    }));
+  const setOption = (index: number, patch: Partial<AdminIssueOptionInput>) => {
+    onChange({
+      ...draft,
+      options: draft.options.map((option, optionIndex) => (optionIndex === index ? { ...option, ...patch } : option))
+    });
   };
 
   return (
     <section className="rounded-3xl bg-white p-5 shadow-soft">
       <div className="mb-5 flex items-center justify-between">
-        <h2 className="text-xl font-black text-vote-ink">{issue.title ? "현안 수정" : "현안 추가"}</h2>
+        <h2 className="text-xl font-black text-vote-ink">{draft.id ? "현안 수정" : "현안 추가"}</h2>
         <div className="flex gap-2">
-          <Button variant="primary" size="sm" onClick={() => onSave(draft)}>
+          <Button variant="primary" size="sm" onClick={onSave} disabled={saving}>
             <Save className="h-4 w-4" />
             저장
           </Button>
-          {issue.title ? (
-            <Button variant="outline" size="sm" onClick={() => onDelete(issue.id)}>
+          {draft.id ? (
+            <Button variant="outline" size="sm" onClick={onDelete} disabled={saving}>
               <Trash2 className="h-4 w-4" />
               삭제
             </Button>
@@ -236,22 +320,28 @@ function IssueEditor({
 
       <div className="grid gap-4 md:grid-cols-2">
         <Field label="현안 제목">
-          <Input value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} placeholder="예: 새 정치 현안" />
+          <Input value={draft.title} onChange={(event) => onChange({ ...draft, title: event.target.value })} />
         </Field>
-        <Field label="뉴스 링크 제목">
-          <Input value={draft.newsTitle} onChange={(event) => setDraft({ ...draft, newsTitle: event.target.value })} placeholder="관련 뉴스 제목" />
+        <Field label="Slug">
+          <Input value={draft.slug} onChange={(event) => onChange({ ...draft, slug: event.target.value })} placeholder="presidential-term-reform" />
         </Field>
         <Field label="요약">
-          <Textarea value={draft.summary} onChange={(event) => setDraft({ ...draft, summary: event.target.value })} className="min-h-[92px]" />
+          <Textarea value={draft.summary} onChange={(event) => onChange({ ...draft, summary: event.target.value })} className="min-h-[92px]" />
+        </Field>
+        <Field label="설명">
+          <Textarea value={draft.description} onChange={(event) => onChange({ ...draft, description: event.target.value })} className="min-h-[92px]" />
+        </Field>
+        <Field label="뉴스 제목">
+          <Input value={draft.newsTitle} onChange={(event) => onChange({ ...draft, newsTitle: event.target.value })} />
         </Field>
         <Field label="뉴스 URL">
-          <Input value={draft.newsUrl} onChange={(event) => setDraft({ ...draft, newsUrl: event.target.value })} placeholder="https://..." />
+          <Input value={draft.newsUrl} onChange={(event) => onChange({ ...draft, newsUrl: event.target.value })} />
         </Field>
       </div>
 
       <div className="mt-4 flex flex-wrap gap-2">
-        <Toggle active={draft.hot} label="핫이슈 지정" onClick={() => setDraft({ ...draft, hot: !draft.hot })} />
-        <Toggle active={draft.published} label="공개 여부" onClick={() => setDraft({ ...draft, published: !draft.published })} />
+        <Toggle active={draft.hot} label="핫이슈 지정" onClick={() => onChange({ ...draft, hot: !draft.hot })} />
+        <Toggle active={draft.published} label="공개 여부" onClick={() => onChange({ ...draft, published: !draft.published })} />
       </div>
 
       <div className="mt-6 grid gap-4 md:grid-cols-2">
@@ -263,9 +353,13 @@ function IssueEditor({
             </div>
             <div className="space-y-3">
               <Input value={option.title} onChange={(event) => setOption(index, { title: event.target.value })} placeholder="의견 제목" />
-              <Textarea value={option.pros} onChange={(event) => setOption(index, { pros: event.target.value })} placeholder="장점 입력, 줄바꿈으로 구분" />
-              <Textarea value={option.cons} onChange={(event) => setOption(index, { cons: event.target.value })} placeholder="단점 입력, 줄바꿈으로 구분" />
+              <Textarea value={option.shortText} onChange={(event) => setOption(index, { shortText: event.target.value })} placeholder="카드에 표시될 설명" />
+              <Input value={option.partyAlignment} onChange={(event) => setOption(index, { partyAlignment: event.target.value })} placeholder="가까운 정당/정치인" />
+              <Textarea value={option.difference} onChange={(event) => setOption(index, { difference: event.target.value })} placeholder="다른 의견과의 차이" />
+              <Textarea value={option.pros.join("\n")} onChange={(event) => setOption(index, { pros: event.target.value.split("\n").filter(Boolean) })} placeholder="장점 입력, 줄바꿈으로 구분" />
+              <Textarea value={option.cons.join("\n")} onChange={(event) => setOption(index, { cons: event.target.value.split("\n").filter(Boolean) })} placeholder="단점 입력, 줄바꿈으로 구분" />
               <Select value={option.politicianId} onChange={(event) => setOption(index, { politicianId: event.target.value })}>
+                <option value="">정치인 선택</option>
                 {politicians.map((politician) => (
                   <option key={politician.id} value={politician.id}>
                     {politician.name} · {politician.party}

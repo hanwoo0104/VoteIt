@@ -2,8 +2,8 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "보팃 VoteIt",
-    short_name: "VoteIt",
+    name: "보팃",
+    short_name: "보팃",
     description: "정치 현안에 대한 다양한 관점을 비교하고 의견을 표현하는 시민 플랫폼",
     start_url: "/",
     scope: "/",
@@ -13,15 +13,15 @@ export default function manifest(): MetadataRoute.Manifest {
     orientation: "portrait",
     icons: [
       {
-        src: "/icons/icon.svg",
-        sizes: "any",
-        type: "image/svg+xml",
-        purpose: "maskable"
+        src: "/favicon.png",
+        sizes: "107x41",
+        type: "image/png",
+        purpose: "any"
       },
       {
-        src: "/icons/apple-touch-icon.svg",
-        sizes: "180x180",
-        type: "image/svg+xml"
+        src: "/brand/voteit-logo.png",
+        sizes: "107x41",
+        type: "image/png"
       }
     ],
     screenshots: [

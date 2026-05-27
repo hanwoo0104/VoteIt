@@ -19,3 +19,10 @@ export const supabase = isSupabaseConfigured
       }
     })
   : null;
+
+export function getSupabaseClient() {
+  if (!supabase) {
+    throw new Error("Supabase 환경변수가 설정되지 않았습니다. .env.local을 확인해 주세요.");
+  }
+  return supabase;
+}

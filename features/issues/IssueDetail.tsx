@@ -1,35 +1,45 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, ExternalLink, Eye, MessageCircle, ShieldAlert, UsersRound } from "lucide-react";
+import { ArrowLeft, ExternalLink, Eye, MessageCircle, UsersRound } from "lucide-react";
 import { motion } from "framer-motion";
 import { AppShell } from "@/components/layout/AppShell";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { ShimmerLoader } from "@/components/ui/skeleton";
+import { ErrorState } from "@/components/ui/state";
 import { DemographicCharts } from "@/components/charts/DemographicCharts";
 import { CommentSection } from "@/features/comments/CommentSection";
+import { RequireAuth } from "@/features/auth/RequireAuth";
 import { AnalysisPanel } from "@/features/issues/AnalysisPanel";
 import { OptionCard } from "@/features/issues/OptionCard";
-import { getIssueById } from "@/services/data/mockData";
+import { useIssueDetail } from "@/hooks/useIssues";
 import { useAuthStore } from "@/stores/authStore";
-import { useIssueStore } from "@/stores/issueStore";
 import { formatNumber } from "@/lib/utils";
 
 export function IssueDetail({ issueId }: { issueId: string }) {
-  const issue = getIssueById(issueId);
-  const user = useAuthStore((state) => state.user);
-  const selectedOptionId = useIssueStore((state) => state.votes[issueId]);
-  const voteIssue = useIssueStore((state) => state.voteIssue);
+  return (
+    <RequireAuth>
+      <IssueDetailContent issueId={issueId} />
+    </RequireAuth>
+  );
+}
 
-  if (!issue) {
+function IssueDetailContent({ issueId }: { issueId: string }) {
+  const { issue, loading, error, reload, selectedOptionId, submitVote, voting } = useIssueDetail(issueId);
+  const user = useAuthStore((state) => state.user);
+
+  if (loading && !issue) {
+    return (
+      <AppShell showHeader={false} className="space-y-5 px-5 pt-[calc(16px+env(safe-area-inset-top))]">
+        <ShimmerLoader text="현안 상세를 불러오는 중..." />
+      </AppShell>
+    );
+  }
+
+  if (error || !issue) {
     return (
       <AppShell>
-        <div className="rounded-3xl bg-white p-6 text-center shadow-soft">
-          <p className="text-lg font-black text-vote-ink">현안을 찾지 못했어요.</p>
-          <Link href="/">
-            <Button className="mt-4">홈으로</Button>
-          </Link>
-        </div>
+        <ErrorState title="현안을 불러오지 못했습니다" description={error ?? "현안을 찾지 못했어요."} onRetry={reload} />
       </AppShell>
     );
   }
@@ -93,29 +103,6 @@ export function IssueDetail({ issueId }: { issueId: string }) {
           <p className="mt-1 text-sm font-medium text-slate-500">4개 의견 중 가장 가까운 관점을 선택해 주세요.</p>
         </div>
 
-        {!user ? (
-          <div className="rounded-3xl border border-vote-red/10 bg-vote-red/10 p-4">
-            <div className="flex gap-3">
-              <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-vote-red" />
-              <div>
-                <p className="text-sm font-black text-vote-ink">투표와 댓글은 회원가입 후 가능해요.</p>
-                <div className="mt-3 flex gap-2">
-                  <Link href="/login" className="flex-1">
-                    <Button size="sm" variant="primary" className="w-full">
-                      로그인
-                    </Button>
-                  </Link>
-                  <Link href="/signup" className="flex-1">
-                    <Button size="sm" variant="outline" className="w-full">
-                      가입
-                    </Button>
-                  </Link>
-                </div>
-              </div>
-            </div>
-          </div>
-        ) : null}
-
         <div className="space-y-3">
           {issue.options.map((option, index) => (
             <motion.div
@@ -127,8 +114,8 @@ export function IssueDetail({ issueId }: { issueId: string }) {
               <OptionCard
                 option={option}
                 selected={selectedOptionId === option.id}
-                disabled={!user}
-                onSelect={() => voteIssue(issue.id, option.id)}
+                disabled={!user || voting}
+                onSelect={() => submitVote(option.id)}
               />
             </motion.div>
           ))}
@@ -137,12 +124,12 @@ export function IssueDetail({ issueId }: { issueId: string }) {
 
       {selectedOption ? (
         <div className="space-y-5 px-5">
-          <AnalysisPanel issueId={issue.id} optionId={selectedOption.id} />
+          <AnalysisPanel issue={issue} option={selectedOption} />
           {selectedStats ? (
             <section className="space-y-4">
               <div>
                 <h2 className="text-xl font-black text-vote-ink">선택한 사람들의 통계</h2>
-                <p className="mt-1 text-sm font-medium text-slate-500">연령, 성별, 지역, 소득 기준 더미 통계입니다.</p>
+                <p className="mt-1 text-sm font-medium text-slate-500">실제 투표자의 익명화된 집계 통계입니다.</p>
               </div>
               <DemographicCharts statistics={selectedStats} />
             </section>

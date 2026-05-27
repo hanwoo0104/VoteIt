@@ -1,112 +1,248 @@
 "use client";
 
 import Link from "next/link";
-import { LogOut, ShieldCheck, UserRound } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { ChevronDown, Heart, LogOut, MessageCircle, Reply, ShieldCheck, UserRound, Vote } from "lucide-react";
+import { motion } from "framer-motion";
 import { AppShell } from "@/components/layout/AppShell";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { ShimmerLoader } from "@/components/ui/skeleton";
+import { ErrorState } from "@/components/ui/state";
+import { RequireAuth } from "@/features/auth/RequireAuth";
 import { useAuthStore } from "@/stores/authStore";
-import { initials } from "@/lib/utils";
+import { initials, relativeTime } from "@/lib/utils";
+import {
+  fetchMyActivity,
+  type MyActivitySummary,
+  type MyCommentActivity,
+  type MyLikedCommentActivity,
+  type MyVoteActivity
+} from "@/services/profile/activityService";
 
 export default function ProfilePage() {
+  return (
+    <RequireAuth>
+      <ProfileContent />
+    </RequireAuth>
+  );
+}
+
+function ProfileContent() {
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
-  const setDemoRole = useAuthStore((state) => state.setDemoRole);
+  const [activityOpen, setActivityOpen] = useState(false);
+  const [activity, setActivity] = useState<MyActivitySummary | null>(null);
+  const [loadingActivity, setLoadingActivity] = useState(false);
+  const [activityError, setActivityError] = useState("");
+
+  const loadActivity = useCallback(async () => {
+    if (!user) return;
+    setLoadingActivity(true);
+    setActivityError("");
+    try {
+      setActivity(await fetchMyActivity(user.id));
+    } catch (caught) {
+      setActivityError(caught instanceof Error ? caught.message : "내 활동을 불러오지 못했습니다.");
+    } finally {
+      setLoadingActivity(false);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if (activityOpen && !activity && !loadingActivity) {
+      loadActivity();
+    }
+  }, [activityOpen, activity, loadingActivity, loadActivity]);
 
   return (
     <AppShell className="space-y-5">
       <div>
         <h1 className="text-3xl font-black text-vote-ink">마이페이지</h1>
-        <p className="mt-2 text-sm font-medium text-slate-500">세션, 역할, 내 투표 참여 정보를 확인합니다.</p>
+        <p className="mt-2 text-sm font-medium text-slate-500">내 프로필과 참여 기록을 확인합니다.</p>
       </div>
 
       {user ? (
         <section className="rounded-3xl bg-white p-5 shadow-soft">
           <div className="flex items-center gap-4">
-            <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-navy-900 text-xl font-black text-white">
-              {initials(user.nickname)}
-            </div>
+            <ProfileAvatar nickname={user.nickname} avatarUrl={user.avatarUrl} />
             <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <h2 className="truncate text-xl font-black text-vote-ink">{user.nickname}</h2>
-                <Badge className="bg-vote-blue/10 text-vote-blue">{roleLabel(user.role)}</Badge>
-              </div>
-              <p className="mt-1 text-sm font-medium text-slate-500">{user.phone}</p>
+              <p className="text-xs font-black text-slate-400">프로필</p>
+              <h2 className="mt-1 truncate text-2xl font-black text-vote-ink">{user.nickname}</h2>
             </div>
           </div>
-          <div className="mt-5 grid grid-cols-2 gap-3 text-sm">
-            <Info label="성별" value={genderLabel(user.gender)} />
-            <Info label="연령대" value={user.ageGroup} />
-            <Info label="지역" value={user.region} />
-            <Info label="소득" value={user.incomeLevel} />
-          </div>
+
           <div className="mt-5 flex gap-2">
-            {user.role !== "admin" ? (
-              <Button variant="soft" className="flex-1" onClick={() => setDemoRole("admin")}>
-                <ShieldCheck className="h-5 w-5" />
-                관리자 전환
-              </Button>
-            ) : (
+            {user.role === "admin" ? (
               <Link href="/admin" className="flex-1">
                 <Button variant="primary" className="w-full">
+                  <ShieldCheck className="h-5 w-5" />
                   관리자 페이지
                 </Button>
               </Link>
-            )}
+            ) : null}
             <Button variant="outline" className="flex-1" onClick={() => logout()}>
               <LogOut className="h-5 w-5" />
               로그아웃
             </Button>
           </div>
         </section>
-      ) : (
-        <section className="rounded-3xl bg-white p-5 text-center shadow-soft">
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-slate-100 text-slate-500">
-            <UserRound className="h-8 w-8" />
-          </div>
-          <h2 className="mt-4 text-xl font-black text-vote-ink">로그인이 필요해요</h2>
-          <p className="mt-2 text-sm leading-relaxed text-slate-500">가입하면 투표, 댓글, 정치인 채팅 기록이 내 계정에 저장됩니다.</p>
-          <div className="mt-5 flex gap-2">
-            <Link href="/login" className="flex-1">
-              <Button variant="primary" className="w-full">
-                로그인
-              </Button>
-            </Link>
-            <Link href="/signup" className="flex-1">
-              <Button variant="outline" className="w-full">
-                회원가입
-              </Button>
-            </Link>
-          </div>
-        </section>
-      )}
+      ) : null}
 
-      <section className="rounded-3xl bg-vote-ink p-5 text-white shadow-soft">
-        <p className="text-sm font-black text-white/70">PWA 상태</p>
-        <h2 className="mt-2 text-xl font-black">홈 화면 설치와 safe-area 대응 완료</h2>
-        <p className="mt-2 text-sm leading-relaxed text-white/70">하단 탭바는 모바일 브라우저와 설치형 PWA에서 모두 안전 영역을 피하도록 고정됩니다.</p>
+      <section className="overflow-hidden rounded-3xl bg-white shadow-soft">
+        <button
+          type="button"
+          className="flex w-full items-center justify-between gap-3 p-5 text-left transition active:scale-[0.99]"
+          onClick={() => setActivityOpen((value) => !value)}
+        >
+          <div className="flex items-center gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-vote-blue/10 text-vote-blue">
+              <UserRound className="h-5 w-5" />
+            </div>
+            <div>
+              <h2 className="text-lg font-black text-vote-ink">내 활동 보기</h2>
+              <p className="mt-1 text-xs font-semibold text-slate-400">투표, 댓글, 공감, 답글 기록</p>
+            </div>
+          </div>
+          <ChevronDown className={`h-5 w-5 text-slate-400 transition ${activityOpen ? "rotate-180" : ""}`} />
+        </button>
+
+        {activityOpen ? (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            className="border-t border-slate-100 px-5 pb-5"
+          >
+            {loadingActivity ? <ShimmerLoader text="내 활동을 불러오는 중..." /> : null}
+            {activityError ? <ErrorState description={activityError} onRetry={loadActivity} /> : null}
+            {activity ? <ActivitySummary activity={activity} /> : null}
+          </motion.div>
+        ) : null}
       </section>
     </AppShell>
   );
 }
 
-function Info({ label, value }: { label: string; value: string }) {
+function ProfileAvatar({ nickname, avatarUrl }: { nickname: string; avatarUrl?: string }) {
+  if (avatarUrl) {
+    return (
+      <div
+        aria-label={`${nickname} 프로필 이미지`}
+        className="h-20 w-20 shrink-0 rounded-[28px] bg-cover bg-center shadow-soft"
+        style={{ backgroundImage: `url(${avatarUrl})` }}
+      />
+    );
+  }
+
   return (
-    <div className="rounded-2xl bg-slate-50 p-3">
-      <p className="text-xs font-bold text-slate-400">{label}</p>
-      <p className="mt-1 truncate font-black text-vote-ink">{value}</p>
+    <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-[28px] bg-navy-900 text-2xl font-black text-white shadow-soft">
+      {initials(nickname)}
     </div>
   );
 }
 
-function roleLabel(role: string) {
-  if (role === "admin") return "관리자";
-  if (role === "politician") return "정치인";
-  return "일반 사용자";
+function ActivitySummary({ activity }: { activity: MyActivitySummary }) {
+  const empty =
+    activity.votes.length === 0 &&
+    activity.comments.length === 0 &&
+    activity.likedComments.length === 0 &&
+    activity.replies.length === 0;
+
+  if (empty) {
+    return (
+      <div className="rounded-3xl bg-slate-50 p-5 text-center">
+        <p className="text-sm font-black text-vote-ink">아직 활동 기록이 없습니다</p>
+        <p className="mt-1 text-xs font-medium text-slate-400">현안에 의견을 남기면 이곳에 모입니다.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-5 pt-5">
+      <VoteActivityList items={activity.votes} />
+      <CommentActivityList title="내가 단 댓글" icon={MessageCircle} items={activity.comments} />
+      <LikedCommentActivityList items={activity.likedComments} />
+      <CommentActivityList title="내가 단 답글" icon={Reply} items={activity.replies} />
+    </div>
+  );
 }
 
-function genderLabel(gender: string) {
-  if (gender === "female") return "여성";
-  if (gender === "male") return "남성";
-  return "기타/응답 안 함";
+function VoteActivityList({ items }: { items: MyVoteActivity[] }) {
+  return (
+    <ActivityBlock title="내가 선택한 의견" icon={Vote} count={items.length}>
+      {items.map((item) => (
+        <Link key={`${item.issueId}-${item.optionTitle}`} href={`/issues/${item.issueSlug}`} className="block rounded-2xl bg-slate-50 p-4">
+          <p className="line-clamp-1 text-sm font-black text-vote-ink">{item.issueTitle}</p>
+          <p className="mt-2 text-sm font-bold text-vote-blue">{item.optionTitle}</p>
+          {item.optionText ? <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-slate-500">{item.optionText}</p> : null}
+          <p className="mt-2 text-[11px] font-semibold text-slate-400">{relativeTime(item.createdAt)}</p>
+        </Link>
+      ))}
+    </ActivityBlock>
+  );
+}
+
+function CommentActivityList({
+  title,
+  icon,
+  items
+}: {
+  title: string;
+  icon: typeof MessageCircle;
+  items: MyCommentActivity[];
+}) {
+  return (
+    <ActivityBlock title={title} icon={icon} count={items.length}>
+      {items.map((item) => (
+        <Link key={item.id} href={`/issues/${item.issueSlug}`} className="block rounded-2xl bg-slate-50 p-4">
+          <p className="line-clamp-1 text-sm font-black text-vote-ink">{item.issueTitle}</p>
+          <p className="mt-2 line-clamp-3 text-sm leading-relaxed text-slate-600">{item.body}</p>
+          <p className="mt-2 text-[11px] font-semibold text-slate-400">{relativeTime(item.createdAt)}</p>
+        </Link>
+      ))}
+    </ActivityBlock>
+  );
+}
+
+function LikedCommentActivityList({ items }: { items: MyLikedCommentActivity[] }) {
+  return (
+    <ActivityBlock title="하트 누른 댓글" icon={Heart} count={items.length}>
+      {items.map((item) => (
+        <Link key={item.id} href={`/issues/${item.issueSlug}`} className="block rounded-2xl bg-slate-50 p-4">
+          <p className="line-clamp-1 text-sm font-black text-vote-ink">{item.issueTitle}</p>
+          <p className="mt-2 text-xs font-black text-slate-400">{item.authorNickname}</p>
+          <p className="mt-1 line-clamp-3 text-sm leading-relaxed text-slate-600">{item.body}</p>
+          <p className="mt-2 text-[11px] font-semibold text-slate-400">{relativeTime(item.likedAt)}</p>
+        </Link>
+      ))}
+    </ActivityBlock>
+  );
+}
+
+function ActivityBlock({
+  title,
+  icon: Icon,
+  count,
+  children
+}: {
+  title: string;
+  icon: typeof Vote;
+  count: number;
+  children: React.ReactNode;
+}) {
+  return (
+    <div>
+      <div className="mb-3 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Icon className="h-4 w-4 text-vote-red" />
+          <h3 className="text-sm font-black text-vote-ink">{title}</h3>
+        </div>
+        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-black text-slate-500">{count}</span>
+      </div>
+      {count > 0 ? <div className="space-y-2">{children}</div> : <EmptyActivity />}
+    </div>
+  );
+}
+
+function EmptyActivity() {
+  return <p className="rounded-2xl bg-slate-50 p-4 text-sm font-medium text-slate-400">아직 기록이 없습니다.</p>;
 }

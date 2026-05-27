@@ -3,10 +3,12 @@
 import { useEffect, useState } from "react";
 import { Bot, Check, MinusCircle, Sparkles, UsersRound } from "lucide-react";
 import { motion } from "framer-motion";
-import { analysisLoadingSteps, getMockAnalysis } from "@/services/ai/mockAnalysis";
-import type { AIAnalysis } from "@/types";
+import { analysisLoadingSteps } from "@/services/ai/mockAnalysis";
+import { generateAnalysis } from "@/services/ai/generateAnalysis";
+import { fetchPoliticians } from "@/services/chat/chatService";
+import type { AIAnalysis, Issue, IssueOption } from "@/types";
 
-export function AnalysisPanel({ issueId, optionId }: { issueId: string; optionId: string }) {
+export function AnalysisPanel({ issue, option }: { issue: Issue; option: IssueOption }) {
   const [analysis, setAnalysis] = useState<AIAnalysis | null>(null);
   const [stepIndex, setStepIndex] = useState(0);
 
@@ -19,7 +21,9 @@ export function AnalysisPanel({ issueId, optionId }: { issueId: string; optionId
       setStepIndex((current) => Math.min(current + 1, analysisLoadingSteps.length - 1));
     }, 520);
 
-    getMockAnalysis(issueId, optionId)
+    fetchPoliticians()
+      .catch(() => [])
+      .then((politicians) => generateAnalysis({ issue, option, politicians }))
       .then((result) => {
         if (mounted) setAnalysis(result);
       })
@@ -29,7 +33,7 @@ export function AnalysisPanel({ issueId, optionId }: { issueId: string; optionId
       mounted = false;
       window.clearInterval(stepTimer);
     };
-  }, [issueId, optionId]);
+  }, [issue.id, option.id]);
 
   if (!analysis) {
     return (

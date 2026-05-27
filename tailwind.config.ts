@@ -39,8 +39,8 @@ const config: Config = {
         }
       },
       boxShadow: {
-        soft: "0 20px 60px rgba(15, 39, 68, 0.12)",
-        glow: "0 0 0 1px rgba(255,255,255,0.35), 0 18px 45px rgba(228,35,63,0.25)"
+        soft: "none",
+        glow: "none"
       },
       keyframes: {
         shimmer: {

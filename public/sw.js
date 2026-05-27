@@ -1,5 +1,5 @@
 const CACHE_NAME = "voteit-pwa-v1";
-const OFFLINE_URLS = ["/", "/manifest.webmanifest", "/icons/icon.svg"];
+const OFFLINE_URLS = ["/", "/manifest.webmanifest", "/favicon.png", "/brand/voteit-logo.png"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(

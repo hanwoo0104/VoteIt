@@ -1,5 +1,4 @@
-import { getIssueById, getPoliticianById } from "@/services/data/mockData";
-import type { AIAnalysis } from "@/types";
+import type { AIAnalysis, Issue, IssueOption, Politician } from "@/types";
 
 export const analysisLoadingSteps = [
   "AI가 의견 차이를 분석 중...",
@@ -7,32 +6,26 @@ export const analysisLoadingSteps = [
   "관련 정치인 발언을 분석 중..."
 ];
 
-export async function getMockAnalysis(issueId: string, optionId: string): Promise<AIAnalysis> {
-  await new Promise((resolve) => setTimeout(resolve, 1700));
+export async function getMockAnalysis(
+  issue: Issue,
+  option: IssueOption,
+  politicians: Politician[] = []
+): Promise<AIAnalysis> {
+  await new Promise((resolve) => setTimeout(resolve, 900));
 
-  const issue = getIssueById(issueId);
-  const option = issue?.options.find((item) => item.id === optionId);
-
-  if (!issue || !option) {
-    throw new Error("분석할 의견을 찾지 못했어요.");
-  }
-
-  const politicians = option.politicianIds
-    .map((id) => getPoliticianById(id))
-    .filter(Boolean)
-    .map((politician) => `${politician!.name} ${politician!.role}은 ${option.title} 관점과 가까운 메시지를 내고 있어요.`);
+  const connected = politicians.filter((politician) => option.politicianIds.includes(politician.id));
 
   return {
-    optionId,
+    optionId: option.id,
     alignment: option.partyAlignment,
-    difference: option.difference,
+    difference: option.difference || `${issue.title}에 대해 '${option.title}' 관점은 우선순위가 분명한 선택입니다.`,
     pros: option.pros,
     cons: option.cons,
     politicianNotes:
-      politicians.length > 0
-        ? politicians
-        : ["현재 연결된 정치인은 없지만, 관련 발언이 등록되면 이 영역에 자동으로 정리됩니다."],
+      connected.length > 0
+        ? connected.map((politician) => `${politician.name} ${politician.role}의 공개 입장과 일부 쟁점이 연결됩니다.`)
+        : ["연결된 정치인 발언이 등록되면 이 영역에 자동으로 요약됩니다."],
     closing:
-      "이 선택은 절대적인 정답이라기보다 우선순위의 표현에 가까워요. 다른 의견의 장점도 함께 보면 토론에서 설득력이 더 좋아집니다."
+      "이 분석은 사용자가 선택한 관점의 강점과 한계를 균형 있게 보기 위한 보조 자료입니다. 반대 의견의 좋은 근거까지 함께 읽으면 토론 품질이 높아집니다."
   };
 }
