@@ -8,12 +8,12 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "seed:demo-user": "node scripts/create-demo-user.mjs",
-    "seed:admin-user": "node scripts/create-demo-user.mjs --phone=010-0000-0000 --password=admin1234! --role=admin --name=관리자 --nickname=보팃관리자 --gender=other --age-group=30대 --region=서울 --income-level=400-600만원"
+    "db:reset": "node scripts/reset-sqlite.mjs",
+    "seed:demo-user": "node scripts/print-demo-accounts.mjs",
+    "seed:admin-user": "node scripts/print-demo-accounts.mjs"
   },
   "dependencies": {
     "@radix-ui/react-slot": "^1.1.2",
-    "@supabase/supabase-js": "^2.49.4",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "framer-motion": "^12.7.4",

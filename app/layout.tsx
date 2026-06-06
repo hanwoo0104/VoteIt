@@ -1,7 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
-import { PWAInstallPrompt } from "@/components/common/PWAInstallPrompt";
-import { AuthBootstrap } from "@/components/common/AuthBootstrap";
+import { AppRuntime } from "@/components/common/AppRuntime";
 
 export const metadata: Metadata = {
   title: {
@@ -19,13 +18,13 @@ export const metadata: Metadata = {
   icons: {
     icon: [
       {
-        url: "/favicon.png",
+        url: "/brand/voteit-logo.png",
         type: "image/png",
-        sizes: "107x41"
+        sizes: "2700x1082"
       }
     ],
-    shortcut: "/favicon.png",
-    apple: "/favicon.png"
+    shortcut: "/brand/voteit-logo.png",
+    apple: "/brand/voteit-logo.png"
   }
 };
 
@@ -45,9 +44,7 @@ export default function RootLayout({
   return (
     <html lang="ko">
       <body>
-        <AuthBootstrap />
-        {children}
-        <PWAInstallPrompt />
+        <AppRuntime>{children}</AppRuntime>
       </body>
     </html>
   );

@@ -5,7 +5,6 @@ import { Bot, Check, MinusCircle, Sparkles, UsersRound } from "lucide-react";
 import { motion } from "framer-motion";
 import { analysisLoadingSteps } from "@/services/ai/mockAnalysis";
 import { generateAnalysis } from "@/services/ai/generateAnalysis";
-import { fetchPoliticians } from "@/services/chat/chatService";
 import type { AIAnalysis, Issue, IssueOption } from "@/types";
 
 export function AnalysisPanel({ issue, option }: { issue: Issue; option: IssueOption }) {
@@ -21,9 +20,7 @@ export function AnalysisPanel({ issue, option }: { issue: Issue; option: IssueOp
       setStepIndex((current) => Math.min(current + 1, analysisLoadingSteps.length - 1));
     }, 520);
 
-    fetchPoliticians()
-      .catch(() => [])
-      .then((politicians) => generateAnalysis({ issue, option, politicians }))
+    generateAnalysis({ issue, option, politicians: [] })
       .then((result) => {
         if (mounted) setAnalysis(result);
       })
@@ -108,7 +105,6 @@ export function AnalysisPanel({ issue, option }: { issue: Issue; option: IssueOp
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.28 }} className="grid gap-3">
           <InsightList title="장점" items={analysis.pros} positive />
           <InsightList title="단점" items={analysis.cons} />
-          <InsightList title="관련 정치인 발언 흐름" items={analysis.politicianNotes} positive />
         </motion.div>
 
         <motion.p

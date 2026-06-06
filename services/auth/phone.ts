@@ -15,5 +15,5 @@ export function phoneToAuthEmail(phone: string) {
   if (!/^01\d{8,9}$/.test(normalized)) {
     throw new Error("올바른 휴대폰 번호를 입력해 주세요.");
   }
-  return `${normalized}@phone.voteit.local`;
+  return normalized;
 }

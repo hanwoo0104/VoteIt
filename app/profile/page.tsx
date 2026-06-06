@@ -18,6 +18,7 @@ import {
   type MyLikedCommentActivity,
   type MyVoteActivity
 } from "@/services/profile/activityService";
+import { cancelIssueVote } from "@/services/issues/issueService";
 
 export default function ProfilePage() {
   return (
@@ -33,6 +34,7 @@ function ProfileContent() {
   const [activityOpen, setActivityOpen] = useState(false);
   const [activity, setActivity] = useState<MyActivitySummary | null>(null);
   const [loadingActivity, setLoadingActivity] = useState(false);
+  const [cancelingVoteId, setCancelingVoteId] = useState("");
   const [activityError, setActivityError] = useState("");
 
   const loadActivity = useCallback(async () => {
@@ -53,6 +55,19 @@ function ProfileContent() {
       loadActivity();
     }
   }, [activityOpen, activity, loadingActivity, loadActivity]);
+
+  const cancelVote = async (issueId: string) => {
+    setCancelingVoteId(issueId);
+    setActivityError("");
+    try {
+      await cancelIssueVote(issueId);
+      await loadActivity();
+    } catch (caught) {
+      setActivityError(caught instanceof Error ? caught.message : "선택취소에 실패했습니다.");
+    } finally {
+      setCancelingVoteId("");
+    }
+  };
 
   return (
     <AppShell className="space-y-5">
@@ -114,7 +129,7 @@ function ProfileContent() {
           >
             {loadingActivity ? <ShimmerLoader text="내 활동을 불러오는 중..." /> : null}
             {activityError ? <ErrorState description={activityError} onRetry={loadActivity} /> : null}
-            {activity ? <ActivitySummary activity={activity} /> : null}
+            {activity ? <ActivitySummary activity={activity} cancelingVoteId={cancelingVoteId} onCancelVote={cancelVote} /> : null}
           </motion.div>
         ) : null}
       </section>
@@ -140,7 +155,15 @@ function ProfileAvatar({ nickname, avatarUrl }: { nickname: string; avatarUrl?: 
   );
 }
 
-function ActivitySummary({ activity }: { activity: MyActivitySummary }) {
+function ActivitySummary({
+  activity,
+  cancelingVoteId,
+  onCancelVote
+}: {
+  activity: MyActivitySummary;
+  cancelingVoteId: string;
+  onCancelVote: (issueId: string) => void;
+}) {
   const empty =
     activity.votes.length === 0 &&
     activity.comments.length === 0 &&
@@ -158,7 +181,7 @@ function ActivitySummary({ activity }: { activity: MyActivitySummary }) {
 
   return (
     <div className="space-y-5 pt-5">
-      <VoteActivityList items={activity.votes} />
+      <VoteActivityList items={activity.votes} cancelingVoteId={cancelingVoteId} onCancelVote={onCancelVote} />
       <CommentActivityList title="내가 단 댓글" icon={MessageCircle} items={activity.comments} />
       <LikedCommentActivityList items={activity.likedComments} />
       <CommentActivityList title="내가 단 답글" icon={Reply} items={activity.replies} />
@@ -166,16 +189,35 @@ function ActivitySummary({ activity }: { activity: MyActivitySummary }) {
   );
 }
 
-function VoteActivityList({ items }: { items: MyVoteActivity[] }) {
+function VoteActivityList({
+  items,
+  cancelingVoteId,
+  onCancelVote
+}: {
+  items: MyVoteActivity[];
+  cancelingVoteId: string;
+  onCancelVote: (issueId: string) => void;
+}) {
   return (
     <ActivityBlock title="내가 선택한 의견" icon={Vote} count={items.length}>
       {items.map((item) => (
-        <Link key={`${item.issueId}-${item.optionTitle}`} href={`/issues/${item.issueSlug}`} className="block rounded-2xl bg-slate-50 p-4">
-          <p className="line-clamp-1 text-sm font-black text-vote-ink">{item.issueTitle}</p>
-          <p className="mt-2 text-sm font-bold text-vote-blue">{item.optionTitle}</p>
-          {item.optionText ? <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-slate-500">{item.optionText}</p> : null}
-          <p className="mt-2 text-[11px] font-semibold text-slate-400">{relativeTime(item.createdAt)}</p>
-        </Link>
+        <div key={`${item.issueId}-${item.optionTitle}`} className="rounded-2xl bg-slate-50 p-4">
+          <Link href={`/issues/${item.issueSlug}`} className="block">
+            <p className="line-clamp-1 text-sm font-black text-vote-ink">{item.issueTitle}</p>
+            <p className="mt-2 text-sm font-bold text-vote-blue">{item.optionTitle}</p>
+            {item.optionText ? <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-slate-500">{item.optionText}</p> : null}
+            <p className="mt-2 text-[11px] font-semibold text-slate-400">{relativeTime(item.createdAt)}</p>
+          </Link>
+          <Button
+            variant="outline"
+            size="sm"
+            className="mt-3 w-full"
+            onClick={() => onCancelVote(item.issueId)}
+            disabled={cancelingVoteId === item.issueId}
+          >
+            {cancelingVoteId === item.issueId ? "취소 중..." : "선택취소"}
+          </Button>
+        </div>
       ))}
     </ActivityBlock>
   );

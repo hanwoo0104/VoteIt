@@ -1,20 +1,20 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { fetchIssueBySlug, fetchIssues, fetchMyVote, recordIssueView, voteIssue } from "@/services/issues/issueService";
-import { getSupabaseClient, supabase } from "@/services/supabase/client";
+import { fetchAdminIssues, fetchIssueBySlug, fetchIssues, fetchMyVoteStatus, recordIssueView, voteIssue } from "@/services/issues/issueService";
 import { useAsync } from "@/hooks/useAsync";
 import { useAuthStore } from "@/stores/authStore";
 import type { Issue } from "@/types";
 
-export function useIssues() {
-  return useAsync(fetchIssues, [], { label: "현안 목록" });
+export function useIssues(options: { admin?: boolean } = {}) {
+  return useAsync(options.admin ? fetchAdminIssues : fetchIssues, [options.admin], { label: "현안 목록" });
 }
 
 export function useIssueDetail(slug: string) {
   const user = useAuthStore((state) => state.user);
   const asyncState = useAsync(() => fetchIssueBySlug(slug), [slug], { label: "현안 상세" });
   const [selectedOptionId, setSelectedOptionId] = useState<string | null>(null);
+  const [voteCanceled, setVoteCanceled] = useState(false);
   const [voting, setVoting] = useState(false);
   const mountedRef = useRef(false);
 
@@ -27,15 +27,20 @@ export function useIssueDetail(slug: string) {
 
   useEffect(() => {
     if (!asyncState.data) return;
-    recordIssueView(asyncState.data.id, user?.id).catch(() => undefined);
-  }, [asyncState.data?.id, user?.id]);
+    const viewKey = `voteit-viewed:${asyncState.data.id}`;
+    if (window.sessionStorage.getItem(viewKey) === "true") return;
+    window.sessionStorage.setItem(viewKey, "true");
+    recordIssueView(asyncState.data.id).catch(() => undefined);
+  }, [asyncState.data?.id]);
 
   useEffect(() => {
     if (!asyncState.data) return;
     let active = true;
-    fetchMyVote(asyncState.data.id, user?.id)
-      .then((optionId) => {
-        if (active && mountedRef.current) setSelectedOptionId(optionId);
+    fetchMyVoteStatus(asyncState.data.id)
+      .then((status) => {
+        if (!active || !mountedRef.current) return;
+        setSelectedOptionId(status.optionId);
+        setVoteCanceled(status.canceled);
       })
       .catch(() => undefined);
     return () => {
@@ -44,47 +49,24 @@ export function useIssueDetail(slug: string) {
   }, [asyncState.data?.id, user?.id]);
 
   useEffect(() => {
-    if (!supabase || !asyncState.data) return;
-    const issueId = asyncState.data.id;
-    const client = supabase;
-    const channel = client
-      .channel(`issue:${issueId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "issue_votes",
-          filter: `issue_id=eq.${issueId}`
-        },
-        () => asyncState.reload({ silent: true })
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "comments",
-          filter: `issue_id=eq.${issueId}`
-        },
-        () => asyncState.reload({ silent: true })
-      )
-      .subscribe();
-
-    return () => {
-      client.removeChannel(channel);
-    };
+    if (!asyncState.data) return;
+    const timer = window.setInterval(() => asyncState.reload({ silent: true }), 3500);
+    return () => window.clearInterval(timer);
   }, [asyncState.data?.id, asyncState.reload]);
 
   const submitVote = async (optionId: string) => {
     if (!asyncState.data || !user) throw new Error("로그인이 필요합니다.");
+    if (voteCanceled) throw new Error("선택을 취소한 현안에는 다시 투표할 수 없습니다.");
+    if (selectedOptionId && selectedOptionId !== optionId) {
+      throw new Error("이미 선택한 의견은 다른 의견으로 변경할 수 없습니다.");
+    }
 
     setVoting(true);
     const previous = selectedOptionId;
     setSelectedOptionId(optionId);
 
     try {
-      await voteIssue(asyncState.data.id, optionId, user.id);
+      await voteIssue(asyncState.data.id, optionId);
       await asyncState.reload({ silent: true });
     } catch (error) {
       if (mountedRef.current) setSelectedOptionId(previous);
@@ -98,11 +80,12 @@ export function useIssueDetail(slug: string) {
     ...asyncState,
     issue: asyncState.data as Issue | null,
     selectedOptionId,
+    voteCanceled,
     voting,
     submitVote
   };
 }
 
-export async function assertSupabaseReady() {
-  getSupabaseClient();
+export async function assertDatabaseReady() {
+  return true;
 }

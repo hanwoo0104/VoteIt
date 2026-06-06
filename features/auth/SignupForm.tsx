@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { CheckCircle2, MessageSquareText, ShieldCheck } from "lucide-react";
+import { CheckCircle2, ShieldCheck } from "lucide-react";
 import { motion } from "framer-motion";
 import { AppShell } from "@/components/layout/AppShell";
 import { Logo } from "@/components/common/Logo";
@@ -11,13 +11,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { requestSignupOtp, verifySignupOtp } from "@/services/auth/otp";
-import { isSupabaseConfigured } from "@/services/supabase/client";
 import { useAuthStore } from "@/stores/authStore";
 import type { AgeGroup, Gender, IncomeLevel } from "@/types";
 
 const regions = ["서울", "경기", "인천", "부산", "대구", "광주", "대전", "울산", "세종", "강원", "충청", "전라", "경상", "제주"];
 const ageGroups: AgeGroup[] = ["10대", "20대", "30대", "40대", "50대", "60대 이상"];
-const incomeLevels: IncomeLevel[] = ["200만원 미만", "200-400만원", "400-700만원", "700만원 이상"];
+const incomeLevels: IncomeLevel[] = ["200만원 미만", "200-400만원", "400-700만원", "700만원 이상", "밝히고 싶지 않음"];
 
 export function SignupForm() {
   const router = useRouter();
@@ -74,18 +73,9 @@ export function SignupForm() {
     <AppShell showHeader={false} showBottomNav={false} className="px-5 py-8">
       <div className="mb-8">
         <Logo />
-        <h1 className="mt-8 text-3xl font-black leading-tight text-vote-ink">의견을 더 정확히 비교하기 위한 기본 정보</h1>
-        <p className="mt-3 text-sm leading-relaxed text-slate-500">통계는 익명화된 집계로만 사용됩니다. 인증번호는 DB에 만료 시간과 함께 저장되고, SMS 발송 어댑터만 교체하면 실제 문자로 전환됩니다.</p>
+        <h1 className="mt-8 text-3xl font-black leading-tight text-vote-ink">회원가입</h1>
+        <p className="mt-3 text-sm leading-relaxed text-slate-500">통계는 익명화된 집계로만 사용되며, <br></br>관리자도 특정 유저의 정보에 접근할 수 없습니다.</p>
       </div>
-
-      {!isSupabaseConfigured ? (
-        <div className="mb-5 rounded-3xl border border-vote-red/10 bg-vote-red/10 p-4">
-          <p className="text-sm font-black text-vote-ink">Supabase 환경변수가 필요해요</p>
-          <p className="mt-1 text-xs leading-relaxed text-slate-600">
-            OTP와 회원가입은 실제 DB에 저장되므로 `.env.local` 설정 후 사용할 수 있습니다.
-          </p>
-        </div>
-      ) : null}
 
       {step === "profile" ? (
         <motion.form initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} onSubmit={requestOtp} className="space-y-4 rounded-3xl bg-white p-5 shadow-soft">
@@ -132,9 +122,8 @@ export function SignupForm() {
             </Select>
           </Field>
           {error ? <p className="text-sm font-semibold text-vote-red">{error}</p> : null}
-          <Button type="submit" variant="primary" size="lg" className="w-full" disabled={!isSupabaseConfigured}>
-            <MessageSquareText className="h-5 w-5" />
-            OTP 인증하기
+          <Button type="submit" variant="gradient" size="cta" className="w-full">
+            휴대폰 인증하기
           </Button>
         </motion.form>
       ) : (
@@ -145,12 +134,12 @@ export function SignupForm() {
             </div>
             <div>
               <p className="font-black text-vote-ink">휴대폰 인증</p>
-          <p className="text-sm font-medium text-slate-500">{otpHint}</p>
+              <p className="text-sm font-medium text-slate-500">{otpHint}</p>
             </div>
           </div>
           <Input inputMode="numeric" value={otp} onChange={(event) => setOtp(event.target.value)} className="text-center text-xl font-black tracking-[0.35em]" maxLength={6} />
           {error ? <p className="mt-3 text-sm font-semibold text-vote-red">{error}</p> : null}
-          <Button variant="primary" size="lg" className="mt-5 w-full" onClick={finish} disabled={loading}>
+          <Button variant="gradient" size="cta" className="mt-5 w-full" onClick={finish} disabled={loading}>
             <CheckCircle2 className="h-5 w-5" />
             {loading ? "가입 중..." : otpVerified ? "인증 완료" : "인증 완료하고 시작"}
           </Button>

@@ -12,6 +12,7 @@ const buttonVariants = cva(
       variant: {
         default: "bg-vote-ink text-white shadow-soft hover:bg-navy-900",
         primary: "bg-vote-blue text-white shadow-soft hover:bg-navy-700",
+        gradient: "rounded-full bg-[linear-gradient(100deg,#244868_0%,#e05261_100%)] text-white shadow-soft",
         red: "bg-vote-red text-white shadow-soft hover:bg-red-600",
         ghost: "bg-transparent text-vote-ink hover:bg-slate-100",
         soft: "bg-slate-100 text-vote-ink hover:bg-slate-200",
@@ -21,6 +22,7 @@ const buttonVariants = cva(
         default: "h-12 px-5",
         sm: "h-9 rounded-xl px-3 text-xs",
         lg: "h-14 rounded-3xl px-6 text-base",
+        cta: "h-[52px] rounded-full px-5 text-[16px]",
         icon: "h-11 w-11 rounded-2xl"
       }
     },

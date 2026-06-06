@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { Logo } from "@/components/common/Logo";
-import { isSupabaseConfigured } from "@/services/supabase/client";
 
 export function OnboardingScreen() {
   return (
@@ -42,9 +41,7 @@ export function OnboardingScreen() {
           이미 계정이 있나요? 로그인하기
         </Link>
 
-        <p className="text-center text-[12px] font-medium text-slate-300">
-          {isSupabaseConfigured ? "VoteIt은 로그인 후 이용할 수 있어요." : "먼저 .env.local에 Supabase 연결 정보를 설정해 주세요."}
-        </p>
+        <p className="text-center text-[12px] font-medium text-slate-300">VoteIt은 로그인 후 이용할 수 있어요.</p>
       </motion.section>
     </main>
   );

@@ -13,15 +13,10 @@ export default function manifest(): MetadataRoute.Manifest {
     orientation: "portrait",
     icons: [
       {
-        src: "/favicon.png",
-        sizes: "107x41",
+        src: "/brand/voteit-logo.png",
+        sizes: "2700x1082",
         type: "image/png",
         purpose: "any"
-      },
-      {
-        src: "/brand/voteit-logo.png",
-        sizes: "107x41",
-        type: "image/png"
       }
     ],
     screenshots: [

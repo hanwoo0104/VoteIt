@@ -1,10 +1,13 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import { ArrowLeft, ExternalLink, Eye, MessageCircle, UsersRound } from "lucide-react";
 import { motion } from "framer-motion";
 import { AppShell } from "@/components/layout/AppShell";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Modal } from "@/components/ui/modal";
 import { ShimmerLoader } from "@/components/ui/skeleton";
 import { ErrorState } from "@/components/ui/state";
 import { DemographicCharts } from "@/components/charts/DemographicCharts";
@@ -25,8 +28,10 @@ export function IssueDetail({ issueId }: { issueId: string }) {
 }
 
 function IssueDetailContent({ issueId }: { issueId: string }) {
-  const { issue, loading, error, reload, selectedOptionId, submitVote, voting } = useIssueDetail(issueId);
+  const { issue, loading, error, reload, selectedOptionId, voteCanceled, submitVote, voting } = useIssueDetail(issueId);
   const user = useAuthStore((state) => state.user);
+  const [pendingOptionId, setPendingOptionId] = useState<string | null>(null);
+  const [voteError, setVoteError] = useState("");
 
   if (loading && !issue) {
     return (
@@ -45,7 +50,26 @@ function IssueDetailContent({ issueId }: { issueId: string }) {
   }
 
   const selectedOption = issue.options.find((option) => option.id === selectedOptionId);
+  const pendingOption = issue.options.find((option) => option.id === pendingOptionId);
   const selectedStats = selectedOption ? issue.statistics[selectedOption.id] : undefined;
+  const voteLocked = Boolean(selectedOptionId) || voteCanceled;
+
+  const requestVote = (optionId: string) => {
+    setVoteError("");
+    if (!user || voting || voteLocked) return;
+    setPendingOptionId(optionId);
+  };
+
+  const confirmVote = async () => {
+    if (!pendingOptionId) return;
+    setVoteError("");
+    try {
+      await submitVote(pendingOptionId);
+      setPendingOptionId(null);
+    } catch (caught) {
+      setVoteError(caught instanceof Error ? caught.message : "의견 선택에 실패했습니다.");
+    }
+  };
 
   return (
     <AppShell showHeader={false} className="space-y-5 px-0">
@@ -100,8 +124,15 @@ function IssueDetailContent({ issueId }: { issueId: string }) {
       <section className="space-y-3 px-5">
         <div>
           <h2 className="text-xl font-black text-vote-ink">나의 의견은?</h2>
-          <p className="mt-1 text-sm font-medium text-slate-500">4개 의견 중 가장 가까운 관점을 선택해 주세요.</p>
+          <p className="mt-1 text-sm font-medium text-slate-500">
+            {voteCanceled
+              ? "마이페이지에서 선택을 취소한 현안은 다시 투표할 수 없습니다."
+              : selectedOption
+                ? "이미 선택한 의견은 다른 의견으로 변경할 수 없습니다."
+                : "4개 의견 중 가장 가까운 관점을 선택해 주세요."}
+          </p>
         </div>
+        {voteError ? <p className="rounded-2xl bg-vote-red/10 p-3 text-sm font-bold text-vote-red">{voteError}</p> : null}
 
         <div className="space-y-3">
           {issue.options.map((option, index) => (
@@ -114,8 +145,9 @@ function IssueDetailContent({ issueId }: { issueId: string }) {
               <OptionCard
                 option={option}
                 selected={selectedOptionId === option.id}
-                disabled={!user || voting}
-                onSelect={() => submitVote(option.id)}
+                disabled={!user || voting || voteLocked}
+                actionLabel={voteLocked ? (selectedOptionId === option.id ? "선택한 의견" : "선택 불가") : "탭해서 의견 선택"}
+                onSelect={() => requestVote(option.id)}
               />
             </motion.div>
           ))}
@@ -140,6 +172,26 @@ function IssueDetailContent({ issueId }: { issueId: string }) {
       <div className="px-5">
         <CommentSection issueId={issue.id} />
       </div>
+
+      <Modal open={Boolean(pendingOption)} title="이 의견으로 선택할까요?" onClose={() => setPendingOptionId(null)}>
+        <div className="space-y-4">
+          <div className="rounded-3xl bg-slate-50 p-4">
+            <p className="text-sm font-black text-vote-ink">{pendingOption?.title}</p>
+            <p className="mt-2 text-sm leading-relaxed text-slate-600">{pendingOption?.shortText}</p>
+          </div>
+          <p className="text-sm leading-relaxed text-slate-500">
+            의견은 한 번 선택하면 다른 의견으로 바꿀 수 없습니다. 선택취소는 마이페이지에서만 가능하며, 취소한 현안에는 다시 투표할 수 없습니다.
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            <Button variant="soft" onClick={() => setPendingOptionId(null)} disabled={voting}>
+              취소
+            </Button>
+            <Button variant="primary" onClick={confirmVote} disabled={voting}>
+              {voting ? "저장 중..." : "선택하기"}
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </AppShell>
   );
 }

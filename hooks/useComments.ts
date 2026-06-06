@@ -9,7 +9,6 @@ import {
   toggleCommentLike,
   updateComment as editComment
 } from "@/services/comments/commentService";
-import { supabase } from "@/services/supabase/client";
 import { useAuthStore } from "@/stores/authStore";
 import type { CommentSort } from "@/types";
 
@@ -34,7 +33,7 @@ export function useComments(issueId: string) {
     }
     setError(null);
     try {
-      const nextComments = await fetchComments(issueId, sort, user?.id);
+      const nextComments = await fetchComments(issueId, sort);
       if (!mountedRef.current || requestId !== requestIdRef.current) return;
       setComments(nextComments);
     } catch (caught) {
@@ -59,27 +58,8 @@ export function useComments(issueId: string) {
   }, [reload]);
 
   useEffect(() => {
-    if (!supabase) return;
-    const client = supabase;
-    const channel = client
-      .channel(`comments:${issueId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "comments",
-          filter: `issue_id=eq.${issueId}`
-        },
-        () => reload({ silent: true })
-      )
-      .on("postgres_changes", { event: "*", schema: "public", table: "comment_likes" }, () => reload({ silent: true }))
-      .on("postgres_changes", { event: "*", schema: "public", table: "reports" }, () => reload({ silent: true }))
-      .subscribe();
-
-    return () => {
-      client.removeChannel(channel);
-    };
+    const timer = window.setInterval(() => reload({ silent: true }), 4000);
+    return () => window.clearInterval(timer);
   }, [issueId, reload]);
 
   return {

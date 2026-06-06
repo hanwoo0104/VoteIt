@@ -9,11 +9,13 @@ export function OptionCard({
   option,
   selected,
   disabled,
+  actionLabel = "탭해서 의견 선택",
   onSelect
 }: {
   option: IssueOption;
   selected: boolean;
   disabled?: boolean;
+  actionLabel?: string;
   onSelect: () => void;
 }) {
   return (
@@ -40,7 +42,7 @@ export function OptionCard({
         </div>
         <div className="flex items-center justify-between text-xs font-bold text-white/80">
           <span>현재 {option.percent}% 선택</span>
-          <span>탭해서 의견 선택</span>
+          <span>{actionLabel}</span>
         </div>
       </div>
     </motion.button>

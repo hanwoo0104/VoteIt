@@ -1,0 +1,11 @@
+console.log("VoteIt SQLite demo accounts");
+console.log("");
+console.log("일반 사용자");
+console.log("Phone: 010-1234-5678");
+console.log("Password: voteit1234!");
+console.log("");
+console.log("관리자");
+console.log("Phone: 010-0000-0000");
+console.log("Password: admin1234!");
+console.log("");
+console.log("data/voteit.sqlite는 앱 첫 실행 또는 첫 API 요청 시 자동 생성됩니다.");

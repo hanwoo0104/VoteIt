@@ -1,7 +1,7 @@
 export type UserRole = "user" | "politician" | "admin";
 export type Gender = "female" | "male" | "other";
 export type AgeGroup = "10대" | "20대" | "30대" | "40대" | "50대" | "60대 이상";
-export type IncomeLevel = "200만원 미만" | "200-400만원" | "400-700만원" | "700만원 이상";
+export type IncomeLevel = "200만원 미만" | "200-400만원" | "400-700만원" | "700만원 이상" | "밝히고 싶지 않음";
 
 export interface Demographics {
   gender: Gender;

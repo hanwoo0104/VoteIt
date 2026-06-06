@@ -7,7 +7,6 @@ import { motion } from "framer-motion";
 import { AppShell } from "@/components/layout/AppShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { ShimmerLoader } from "@/components/ui/skeleton";
@@ -15,6 +14,7 @@ import { ErrorState } from "@/components/ui/state";
 import { RequireAuth } from "@/features/auth/RequireAuth";
 import {
   deleteAdminIssue,
+  deleteReportedComment,
   fetchAdminStats,
   fetchPendingReports,
   resolveReport,
@@ -22,11 +22,10 @@ import {
   type AdminIssueInput,
   type AdminIssueOptionInput
 } from "@/services/admin/adminService";
-import { fetchPoliticians } from "@/services/chat/chatService";
 import { useIssues } from "@/hooks/useIssues";
 import { useAuthStore } from "@/stores/authStore";
 import { formatNumber } from "@/lib/utils";
-import type { Issue, Politician } from "@/types";
+import type { Issue } from "@/types";
 
 type DraftIssue = AdminIssueInput;
 
@@ -46,8 +45,7 @@ const emptyDraft = (): DraftIssue => ({
     partyAlignment: "",
     difference: "",
     pros: [],
-    cons: [],
-    politicianId: ""
+    cons: []
   }))
 });
 
@@ -64,8 +62,7 @@ function issueToDraft(issue: Issue): DraftIssue {
       partyAlignment: option.partyAlignment,
       difference: option.difference,
       pros: option.pros,
-      cons: option.cons,
-      politicianId: option.politicianIds[0] ?? ""
+      cons: option.cons
     };
   });
 
@@ -94,8 +91,7 @@ export function AdminDashboard() {
 
 function AdminContent() {
   const user = useAuthStore((state) => state.user);
-  const { data: issues, loading, error, reload } = useIssues();
-  const [politicians, setPoliticians] = useState<Politician[]>([]);
+  const { data: issues, loading, error, reload } = useIssues({ admin: true });
   const [selectedId, setSelectedId] = useState("new");
   const [draft, setDraft] = useState<DraftIssue>(emptyDraft());
   const [stats, setStats] = useState({ users: 0, participants: 0, reports: 0, hot: 0 });
@@ -114,13 +110,11 @@ function AdminContent() {
     if (user?.role !== "admin") return;
     setAdminError("");
     try {
-      const [loadedStats, loadedPoliticians, loadedReports] = await Promise.all([
+      const [loadedStats, loadedReports] = await Promise.all([
         fetchAdminStats(),
-        fetchPoliticians(),
         fetchPendingReports()
       ]);
       setStats(loadedStats);
-      setPoliticians(loadedPoliticians);
       setReports(loadedReports as Array<Record<string, unknown>>);
     } catch (caught) {
       setAdminError(caught instanceof Error ? caught.message : "관리자 데이터를 불러오지 못했습니다.");
@@ -233,7 +227,6 @@ function AdminContent() {
 
         <IssueEditor
           draft={draft}
-          politicians={politicians}
           saving={saving}
           onChange={setDraft}
           onSave={save}
@@ -252,6 +245,13 @@ function AdminContent() {
                 <p className="text-sm font-bold text-vote-ink">신고 사유: {String(report.reason ?? "user_report")}</p>
                 <p className="mt-1 text-sm text-slate-600">{String((report.comments as { body?: string } | null)?.body ?? "")}</p>
                 <div className="mt-3 flex gap-2">
+                  <Button
+                    size="sm"
+                    variant="red"
+                    onClick={() => deleteReportedComment(String((report.comments as { id?: string } | null)?.id ?? "")).then(loadAdmin)}
+                  >
+                    댓글 삭제
+                  </Button>
                   <Button size="sm" variant="primary" onClick={() => resolveReport(String(report.id), "resolved").then(loadAdmin)}>
                     처리 완료
                   </Button>
@@ -280,14 +280,12 @@ function Metric({ icon: Icon, label, value }: { icon: typeof UsersRound; label: 
 
 function IssueEditor({
   draft,
-  politicians,
   saving,
   onChange,
   onSave,
   onDelete
 }: {
   draft: DraftIssue;
-  politicians: Politician[];
   saving: boolean;
   onChange: (draft: DraftIssue) => void;
   onSave: () => void;
@@ -354,18 +352,10 @@ function IssueEditor({
             <div className="space-y-3">
               <Input value={option.title} onChange={(event) => setOption(index, { title: event.target.value })} placeholder="의견 제목" />
               <Textarea value={option.shortText} onChange={(event) => setOption(index, { shortText: event.target.value })} placeholder="카드에 표시될 설명" />
-              <Input value={option.partyAlignment} onChange={(event) => setOption(index, { partyAlignment: event.target.value })} placeholder="가까운 정당/정치인" />
+              <Input value={option.partyAlignment} onChange={(event) => setOption(index, { partyAlignment: event.target.value })} placeholder="가까운 관점 또는 성향" />
               <Textarea value={option.difference} onChange={(event) => setOption(index, { difference: event.target.value })} placeholder="다른 의견과의 차이" />
               <Textarea value={option.pros.join("\n")} onChange={(event) => setOption(index, { pros: event.target.value.split("\n").filter(Boolean) })} placeholder="장점 입력, 줄바꿈으로 구분" />
               <Textarea value={option.cons.join("\n")} onChange={(event) => setOption(index, { cons: event.target.value.split("\n").filter(Boolean) })} placeholder="단점 입력, 줄바꿈으로 구분" />
-              <Select value={option.politicianId} onChange={(event) => setOption(index, { politicianId: event.target.value })}>
-                <option value="">정치인 선택</option>
-                {politicians.map((politician) => (
-                  <option key={politician.id} value={politician.id}>
-                    {politician.name} · {politician.party}
-                  </option>
-                ))}
-              </Select>
             </div>
           </div>
         ))}
