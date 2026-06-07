@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Check, Flag, Heart, MessageCircle, MoreVertical, Pencil, Send, Trash2, X } from "lucide-react";
+import { Check, Flag, Heart, MessageCircle, MoreVertical, Pencil, RefreshCw, Send, Trash2, X } from "lucide-react";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
@@ -36,19 +36,30 @@ export function CommentSection({ issueId }: { issueId: string }) {
     <section className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-black text-vote-ink">댓글</h2>
-        <div className="rounded-full bg-slate-100 p-1">
+        <div className="flex items-center gap-2">
           <button
-            className={cn("rounded-full px-3 py-1.5 text-xs font-black", sort === "latest" ? "bg-white text-vote-ink shadow-sm" : "text-slate-400")}
-            onClick={() => setSort("latest")}
+            type="button"
+            className="flex h-9 items-center gap-1.5 rounded-full bg-slate-100 px-3 text-xs font-black text-slate-500 transition active:scale-[0.98] disabled:opacity-50"
+            onClick={() => reload()}
+            disabled={loading}
           >
-            최신순
+            <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} />
+            새로고침
           </button>
-          <button
-            className={cn("rounded-full px-3 py-1.5 text-xs font-black", sort === "likes" ? "bg-white text-vote-ink shadow-sm" : "text-slate-400")}
-            onClick={() => setSort("likes")}
-          >
-            공감순
-          </button>
+          <div className="rounded-full bg-slate-100 p-1">
+            <button
+              className={cn("rounded-full px-3 py-1.5 text-xs font-black", sort === "latest" ? "bg-white text-vote-ink shadow-sm" : "text-slate-400")}
+              onClick={() => setSort("latest")}
+            >
+              최신순
+            </button>
+            <button
+              className={cn("rounded-full px-3 py-1.5 text-xs font-black", sort === "likes" ? "bg-white text-vote-ink shadow-sm" : "text-slate-400")}
+              onClick={() => setSort("likes")}
+            >
+              공감순
+            </button>
+          </div>
         </div>
       </div>
 
@@ -223,9 +234,7 @@ function CommentItem({
         className={cn("rounded-3xl bg-white p-4 shadow-sm", depth > 0 && "ml-7 bg-slate-50 shadow-none")}
       >
         <div className="flex gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-navy-900 text-sm font-black text-white">
-            {initials(comment.author.nickname)}
-          </div>
+          <CommentAvatar nickname={comment.author.nickname} avatarUrl={comment.author.avatarUrl} />
           <div className="min-w-0 flex-1">
             <div className="flex items-center justify-between gap-2">
               <div className="min-w-0">
@@ -347,6 +356,24 @@ function CommentItem({
         onConfirm={confirmAction === "delete" ? remove : submitReport}
       />
     </>
+  );
+}
+
+function CommentAvatar({ nickname, avatarUrl }: { nickname: string; avatarUrl?: string }) {
+  if (avatarUrl) {
+    return (
+      <div
+        className="h-10 w-10 shrink-0 rounded-2xl bg-slate-200 bg-cover bg-center"
+        style={{ backgroundImage: `url(${avatarUrl})` }}
+        aria-label={`${nickname} 프로필 이미지`}
+      />
+    );
+  }
+
+  return (
+    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-navy-900 text-sm font-black text-white">
+      {initials(nickname)}
+    </div>
   );
 }
 

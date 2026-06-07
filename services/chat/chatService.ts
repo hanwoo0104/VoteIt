@@ -31,6 +31,10 @@ export async function markChatRead(roomId: string, _readerId: string) {
   await apiFetch<{ ok: true }>(`/api/chats/${encodeURIComponent(roomId)}/read`, { method: "POST" });
 }
 
+export async function deleteChatRoom(roomId: string) {
+  await apiFetch<{ ok: true }>(`/api/chats/${encodeURIComponent(roomId)}`, { method: "DELETE" });
+}
+
 export function subscribeToRoomMessages(roomId: string, onMessage: (message: ChatMessage) => void) {
   let active = true;
   let knownIds = new Set<string>();

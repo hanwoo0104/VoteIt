@@ -36,6 +36,6 @@ export interface MyActivitySummary {
   replies: MyCommentActivity[];
 }
 
-export async function fetchMyActivity(_userId: string): Promise<MyActivitySummary> {
+export async function fetchMyActivity(): Promise<MyActivitySummary> {
   return apiFetch<MyActivitySummary>("/api/profile/activity");
 }

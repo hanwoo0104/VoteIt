@@ -38,7 +38,6 @@ function AuthenticatedHome() {
           <div className="relative z-0">
             <div className="mb-6 flex items-center justify-between">
               <h1 className="text-[19px] font-black text-black">오늘 핫한 주제🔥</h1>
-              <ReactionBurst />
             </div>
             <p className="mx-auto max-w-[300px] text-center text-[21px] font-medium leading-tight text-black">
               {hotIssue.title}
@@ -143,26 +142,5 @@ function HomeActionCard({
         </div>
       </motion.div>
     </Link>
-  );
-}
-
-function ReactionBurst() {
-  const reactions = ["찬", "반", "중", "토"];
-  return (
-    <div className="relative h-8 w-20">
-      {reactions.map((reaction, index) => (
-        <span
-          key={reaction}
-          className="absolute bottom-0 flex h-7 w-7 items-center justify-center rounded-full text-xs font-black text-white shadow-sm"
-          style={{
-            left: `${index * 15}px`,
-            background: index % 2 === 0 ? "#4169e1" : "#e4233f",
-            animation: `floatUp 1.9s ease-in-out ${index * 0.22}s infinite`
-          }}
-        >
-          {reaction}
-        </span>
-      ))}
-    </div>
   );
 }

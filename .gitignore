@@ -8,3 +8,4 @@ coverage
 tsconfig.tsbuildinfo
 data/*.sqlite-wal
 data/*.sqlite-shm
+public/uploads

@@ -57,11 +57,6 @@ export function useComments(issueId: string) {
     reload();
   }, [reload]);
 
-  useEffect(() => {
-    const timer = window.setInterval(() => reload({ silent: true }), 4000);
-    return () => window.clearInterval(timer);
-  }, [issueId, reload]);
-
   return {
     comments,
     sort,

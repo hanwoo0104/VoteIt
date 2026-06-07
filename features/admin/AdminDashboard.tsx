@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { Eye, Flame, MessageCircleWarning, Pencil, Plus, Save, Trash2, UsersRound } from "lucide-react";
+import { Eye, Flame, MessageCircleWarning, Pencil, Plus, Save, Trash2, UserPlus, UsersRound } from "lucide-react";
 import { motion } from "framer-motion";
 import { AppShell } from "@/components/layout/AppShell";
 import { Button } from "@/components/ui/button";
@@ -15,17 +15,21 @@ import { RequireAuth } from "@/features/auth/RequireAuth";
 import {
   deleteAdminIssue,
   deleteReportedComment,
+  createAdminPolitician,
   fetchAdminStats,
+  fetchAdminPoliticians,
   fetchPendingReports,
   resolveReport,
+  uploadAdminPoliticianAvatar,
   upsertAdminIssue,
   type AdminIssueInput,
-  type AdminIssueOptionInput
+  type AdminIssueOptionInput,
+  type AdminPoliticianInput
 } from "@/services/admin/adminService";
 import { useIssues } from "@/hooks/useIssues";
 import { useAuthStore } from "@/stores/authStore";
 import { formatNumber } from "@/lib/utils";
-import type { Issue } from "@/types";
+import type { Issue, Politician } from "@/types";
 
 type DraftIssue = AdminIssueInput;
 
@@ -47,6 +51,16 @@ const emptyDraft = (): DraftIssue => ({
     pros: [],
     cons: []
   }))
+});
+
+const emptyPoliticianDraft = (): AdminPoliticianInput => ({
+  name: "",
+  phone: "",
+  password: "",
+  party: "",
+  roleTitle: "",
+  region: "",
+  tags: []
 });
 
 function issueToDraft(issue: Issue): DraftIssue {
@@ -94,9 +108,14 @@ function AdminContent() {
   const { data: issues, loading, error, reload } = useIssues({ admin: true });
   const [selectedId, setSelectedId] = useState("new");
   const [draft, setDraft] = useState<DraftIssue>(emptyDraft());
+  const [politicianDraft, setPoliticianDraft] = useState<AdminPoliticianInput>(emptyPoliticianDraft());
+  const [politicianAvatarFile, setPoliticianAvatarFile] = useState<File | null>(null);
   const [stats, setStats] = useState({ users: 0, participants: 0, reports: 0, hot: 0 });
   const [reports, setReports] = useState<Array<Record<string, unknown>>>([]);
+  const [politicians, setPoliticians] = useState<Politician[]>([]);
   const [saving, setSaving] = useState(false);
+  const [politicianSaving, setPoliticianSaving] = useState(false);
+  const [uploadingPoliticianId, setUploadingPoliticianId] = useState("");
   const [adminError, setAdminError] = useState("");
 
   const selectedIssue = useMemo(() => issues?.find((issue) => issue.id === selectedId), [issues, selectedId]);
@@ -110,12 +129,14 @@ function AdminContent() {
     if (user?.role !== "admin") return;
     setAdminError("");
     try {
-      const [loadedStats, loadedReports] = await Promise.all([
+      const [loadedStats, loadedReports, loadedPoliticians] = await Promise.all([
         fetchAdminStats(),
-        fetchPendingReports()
+        fetchPendingReports(),
+        fetchAdminPoliticians()
       ]);
       setStats(loadedStats);
       setReports(loadedReports as Array<Record<string, unknown>>);
+      setPoliticians(loadedPoliticians);
     } catch (caught) {
       setAdminError(caught instanceof Error ? caught.message : "관리자 데이터를 불러오지 못했습니다.");
     }
@@ -153,6 +174,35 @@ function AdminContent() {
       setAdminError(caught instanceof Error ? caught.message : "삭제에 실패했습니다.");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const createPolitician = async () => {
+    setPoliticianSaving(true);
+    setAdminError("");
+    try {
+      await createAdminPolitician(politicianDraft, politicianAvatarFile);
+      setPoliticianDraft(emptyPoliticianDraft());
+      setPoliticianAvatarFile(null);
+      await loadAdmin();
+    } catch (caught) {
+      setAdminError(caught instanceof Error ? caught.message : "정치인 계정 생성에 실패했습니다.");
+    } finally {
+      setPoliticianSaving(false);
+    }
+  };
+
+  const changePoliticianAvatar = async (politicianId: string, file?: File | null) => {
+    if (!file) return;
+    setUploadingPoliticianId(politicianId);
+    setAdminError("");
+    try {
+      const updated = await uploadAdminPoliticianAvatar(politicianId, file);
+      setPoliticians((current) => current.map((politician) => (politician.id === updated.id ? updated : politician)));
+    } catch (caught) {
+      setAdminError(caught instanceof Error ? caught.message : "정치인 사진 변경에 실패했습니다.");
+    } finally {
+      setUploadingPoliticianId("");
     }
   };
 
@@ -234,6 +284,18 @@ function AdminContent() {
         />
       </div>
 
+      <PoliticianAccountManager
+        draft={politicianDraft}
+        avatarFile={politicianAvatarFile}
+        politicians={politicians}
+        saving={politicianSaving}
+        uploadingPoliticianId={uploadingPoliticianId}
+        onChange={setPoliticianDraft}
+        onAvatarChange={setPoliticianAvatarFile}
+        onCreate={createPolitician}
+        onChangeExistingAvatar={changePoliticianAvatar}
+      />
+
       <section className="mt-6 rounded-3xl bg-white p-5 shadow-soft">
         <h2 className="text-xl font-black text-vote-ink">댓글 신고 관리</h2>
         {reports.length === 0 ? (
@@ -265,6 +327,132 @@ function AdminContent() {
         )}
       </section>
     </AppShell>
+  );
+}
+
+function PoliticianAccountManager({
+  draft,
+  avatarFile,
+  politicians,
+  saving,
+  uploadingPoliticianId,
+  onChange,
+  onAvatarChange,
+  onCreate,
+  onChangeExistingAvatar
+}: {
+  draft: AdminPoliticianInput;
+  avatarFile: File | null;
+  politicians: Politician[];
+  saving: boolean;
+  uploadingPoliticianId: string;
+  onChange: (draft: AdminPoliticianInput) => void;
+  onAvatarChange: (file: File | null) => void;
+  onCreate: () => void;
+  onChangeExistingAvatar: (politicianId: string, file?: File | null) => void;
+}) {
+  return (
+    <section className="mt-6 rounded-3xl bg-white p-5 shadow-soft">
+      <div className="mb-5 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h2 className="text-xl font-black text-vote-ink">정치인 계정 추가</h2>
+          <p className="mt-1 text-sm font-medium text-slate-500">여기서 만든 정치인 계정만 사용자 DM 목록에 노출됩니다.</p>
+        </div>
+        <Button variant="primary" size="sm" onClick={onCreate} disabled={saving}>
+          <UserPlus className="h-4 w-4" />
+          {saving ? "생성 중..." : "계정 생성"}
+        </Button>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <Field label="이름">
+          <Input value={draft.name} onChange={(event) => onChange({ ...draft, name: event.target.value })} placeholder="홍길동" />
+        </Field>
+        <Field label="휴대폰 번호">
+          <Input value={draft.phone} onChange={(event) => onChange({ ...draft, phone: event.target.value })} placeholder="010-0000-0000" />
+        </Field>
+        <Field label="초기 비밀번호">
+          <Input type="password" value={draft.password} onChange={(event) => onChange({ ...draft, password: event.target.value })} placeholder="8자 이상" />
+        </Field>
+        <Field label="정당">
+          <Input value={draft.party} onChange={(event) => onChange({ ...draft, party: event.target.value })} placeholder="민주미래당" />
+        </Field>
+        <Field label="직책">
+          <Input value={draft.roleTitle} onChange={(event) => onChange({ ...draft, roleTitle: event.target.value })} placeholder="국회의원" />
+        </Field>
+        <Field label="지역">
+          <Input value={draft.region} onChange={(event) => onChange({ ...draft, region: event.target.value })} placeholder="서울" />
+        </Field>
+        <Field label="프로필 사진">
+          <label className="flex h-12 cursor-pointer items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-black text-vote-ink transition hover:bg-slate-100">
+            {avatarFile ? avatarFile.name : "사진 업로드"}
+            <input
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/gif"
+              className="sr-only"
+              onChange={(event) => onAvatarChange(event.target.files?.[0] ?? null)}
+            />
+          </label>
+        </Field>
+      </div>
+
+      <Field label="성향 태그">
+        <Textarea
+          value={draft.tags.join("\n")}
+          onChange={(event) => onChange({ ...draft, tags: event.target.value.split(/[\n,]/).map((tag) => tag.trim()).filter(Boolean) })}
+          placeholder={"청년\n주거\nAI"}
+          className="mt-2 min-h-[92px]"
+        />
+      </Field>
+
+      <div className="mt-5">
+        <h3 className="text-sm font-black text-vote-ink">등록된 정치인 계정</h3>
+        {politicians.length === 0 ? (
+          <p className="mt-3 rounded-2xl bg-slate-50 p-4 text-sm font-semibold text-slate-500">아직 등록된 정치인 계정이 없습니다.</p>
+        ) : (
+          <div className="mt-3 grid gap-2 md:grid-cols-2">
+            {politicians.map((politician) => (
+              <div key={politician.id} className="rounded-2xl bg-slate-50 p-4">
+                <div className="flex items-start gap-3">
+                  <div
+                    className="h-14 w-14 shrink-0 rounded-2xl bg-cover bg-center bg-slate-200"
+                    style={{ backgroundImage: `url(${politician.avatarUrl})` }}
+                    aria-label={`${politician.name} 프로필 사진`}
+                  />
+                  <div>
+                    <p className="text-sm font-black text-vote-ink">{politician.name}</p>
+                    <p className="mt-1 text-xs font-semibold text-slate-500">{politician.party}</p>
+                    <p className="mt-1 text-xs font-medium text-slate-400">{politician.role} · {politician.region}</p>
+                  </div>
+                </div>
+                {politician.tags.length ? (
+                  <div className="mt-3 flex flex-wrap gap-1">
+                    {politician.tags.map((tag) => (
+                      <span key={tag} className="rounded-full bg-vote-blue/10 px-2 py-1 text-[10px] font-black text-vote-blue">
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
+                <label className="mt-3 flex h-9 cursor-pointer items-center justify-center rounded-xl bg-white px-3 text-xs font-black text-vote-blue transition hover:bg-vote-blue/10">
+                  {uploadingPoliticianId === politician.id ? "사진 변경 중..." : "사진 변경"}
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp,image/gif"
+                    className="sr-only"
+                    disabled={uploadingPoliticianId === politician.id}
+                    onChange={(event) => {
+                      onChangeExistingAvatar(politician.id, event.target.files?.[0] ?? null);
+                      event.currentTarget.value = "";
+                    }}
+                  />
+                </label>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </section>
   );
 }
 

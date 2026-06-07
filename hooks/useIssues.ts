@@ -15,6 +15,7 @@ export function useIssueDetail(slug: string) {
   const asyncState = useAsync(() => fetchIssueBySlug(slug), [slug], { label: "현안 상세" });
   const [selectedOptionId, setSelectedOptionId] = useState<string | null>(null);
   const [voteCanceled, setVoteCanceled] = useState(false);
+  const [revealedOptionId, setRevealedOptionId] = useState<string | null>(null);
   const [voting, setVoting] = useState(false);
   const mountedRef = useRef(false);
 
@@ -41,6 +42,7 @@ export function useIssueDetail(slug: string) {
         if (!active || !mountedRef.current) return;
         setSelectedOptionId(status.optionId);
         setVoteCanceled(status.canceled);
+        setRevealedOptionId(status.optionId ?? status.canceledOptionId);
       })
       .catch(() => undefined);
     return () => {
@@ -63,13 +65,18 @@ export function useIssueDetail(slug: string) {
 
     setVoting(true);
     const previous = selectedOptionId;
+    const previousRevealed = revealedOptionId;
     setSelectedOptionId(optionId);
+    setRevealedOptionId(optionId);
 
     try {
       await voteIssue(asyncState.data.id, optionId);
       await asyncState.reload({ silent: true });
     } catch (error) {
-      if (mountedRef.current) setSelectedOptionId(previous);
+      if (mountedRef.current) {
+        setSelectedOptionId(previous);
+        setRevealedOptionId(previousRevealed);
+      }
       throw error;
     } finally {
       if (mountedRef.current) setVoting(false);
@@ -80,6 +87,7 @@ export function useIssueDetail(slug: string) {
     ...asyncState,
     issue: asyncState.data as Issue | null,
     selectedOptionId,
+    revealedOptionId,
     voteCanceled,
     voting,
     submitVote

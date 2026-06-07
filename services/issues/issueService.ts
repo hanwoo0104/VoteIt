@@ -23,7 +23,7 @@ export async function fetchMyVote(issueId: string) {
 }
 
 export async function fetchMyVoteStatus(issueId: string) {
-  return apiFetch<{ optionId: string | null; canceled: boolean }>(`/api/issues/${encodeURIComponent(issueId)}/vote`);
+  return apiFetch<{ optionId: string | null; canceled: boolean; canceledOptionId: string | null }>(`/api/issues/${encodeURIComponent(issueId)}/vote`);
 }
 
 export async function voteIssue(issueId: string, optionId: string) {

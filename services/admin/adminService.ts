@@ -1,4 +1,5 @@
 import { apiFetch } from "@/services/api/http";
+import type { Politician } from "@/types";
 
 export interface AdminIssueOptionInput {
   id?: string;
@@ -23,6 +24,16 @@ export interface AdminIssueInput {
   newsOutlet: string;
   newsUrl: string;
   options: AdminIssueOptionInput[];
+}
+
+export interface AdminPoliticianInput {
+  name: string;
+  phone: string;
+  password: string;
+  party: string;
+  roleTitle: string;
+  region: string;
+  tags: string[];
 }
 
 export async function fetchAdminStats() {
@@ -53,4 +64,34 @@ export async function resolveReport(reportId: string, status: "resolved" | "dism
 
 export async function deleteReportedComment(commentId: string) {
   await apiFetch<{ ok: true }>(`/api/comments/${encodeURIComponent(commentId)}`, { method: "DELETE" });
+}
+
+export async function fetchAdminPoliticians() {
+  return apiFetch<Politician[]>("/api/admin/politicians");
+}
+
+export async function createAdminPolitician(input: AdminPoliticianInput, avatarFile?: File | null) {
+  const form = new FormData();
+  form.set("name", input.name);
+  form.set("phone", input.phone);
+  form.set("password", input.password);
+  form.set("party", input.party);
+  form.set("roleTitle", input.roleTitle);
+  form.set("region", input.region);
+  form.set("tags", input.tags.join("\n"));
+  if (avatarFile) form.set("avatar", avatarFile);
+
+  return apiFetch<Politician>("/api/admin/politicians", {
+    method: "POST",
+    body: form
+  });
+}
+
+export async function uploadAdminPoliticianAvatar(politicianId: string, avatarFile: File) {
+  const form = new FormData();
+  form.set("avatar", avatarFile);
+  return apiFetch<Politician>(`/api/admin/politicians/${encodeURIComponent(politicianId)}/avatar`, {
+    method: "POST",
+    body: form
+  });
 }

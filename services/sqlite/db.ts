@@ -65,6 +65,17 @@ export interface AdminIssueInput {
   options: AdminIssueOptionInput[];
 }
 
+export interface AdminPoliticianInput {
+  name: string;
+  phone: string;
+  password: string;
+  party: string;
+  roleTitle: string;
+  region: string;
+  avatarUrl?: string;
+  tags?: string[];
+}
+
 interface UserRow {
   id: string;
   phone: string;
@@ -130,6 +141,7 @@ interface CommentRow {
   likes_count: number;
   created_at: string;
   updated_at: string;
+  name: string | null;
   nickname: string | null;
   avatar_url: string | null;
   role: UserRole | null;
@@ -257,6 +269,13 @@ function transaction<T>(work: () => T) {
   }
 }
 
+function ensureColumn(database: DatabaseSync, table: string, column: string, definition: string) {
+  const columns = database.prepare(`pragma table_info(${table})`).all() as Array<{ name: string }>;
+  if (!columns.some((item) => item.name === column)) {
+    database.exec(`alter table ${table} add column ${column} ${definition}`);
+  }
+}
+
 function createSchema(database: DatabaseSync) {
   database.exec(`
     pragma foreign_keys = on;
@@ -371,6 +390,7 @@ function createSchema(database: DatabaseSync) {
     create table if not exists issue_vote_cancellations (
       issue_id text not null references issues(id) on delete cascade,
       user_id text not null references users(id) on delete cascade,
+      issue_option_id text,
       canceled_at text not null default (datetime('now')),
       primary key (issue_id, user_id)
     );
@@ -446,6 +466,7 @@ function createSchema(database: DatabaseSync) {
     create index if not exists comments_issue_idx on comments(issue_id, created_at);
     create index if not exists chat_messages_room_idx on chat_messages(room_id, created_at);
   `);
+  ensureColumn(database, "issue_vote_cancellations", "issue_option_id", "text");
 }
 
 function upsertUser(input: {
@@ -903,8 +924,105 @@ function mapPolitician(row: PoliticianRow): Politician {
 
 export function listPoliticians() {
   return all<PoliticianRow>(
-    "select id, user_id, name, party, role_title, region, avatar_url, online, status, tags from politicians order by online desc, created_at asc"
+    "select id, user_id, name, party, role_title, region, avatar_url, online, status, tags from politicians where user_id is not null order by created_at desc"
   ).map(mapPolitician);
+}
+
+function uniqueProfileNickname(baseName: string) {
+  const base = baseName.trim() || "정치인";
+  if (!get("select id from profiles where nickname = $nickname", { $nickname: base })) return base;
+  return `${base}-${randomUUID().slice(0, 6)}`;
+}
+
+export function createPoliticianAccount(input: AdminPoliticianInput, user: UserProfile) {
+  assertUserRole(user, "admin");
+  const normalizedPhone = normalizePhone(input.phone);
+  if (!/^01\d{8,9}$/.test(normalizedPhone)) throw new Error("올바른 휴대폰 번호를 입력해 주세요.");
+  if (input.password.length < 8) throw new Error("비밀번호는 8자 이상이어야 합니다.");
+  if (!input.name.trim() || !input.party.trim() || !input.roleTitle.trim() || !input.region.trim()) {
+    throw new Error("정치인 계정 필수 정보를 모두 입력해 주세요.");
+  }
+  if (get("select id from users where phone = $phone", { $phone: normalizedPhone })) {
+    throw new Error("이미 가입된 휴대폰 번호입니다.");
+  }
+
+  const userId = randomUUID();
+  const politicianId = randomUUID();
+  const avatarUrl = input.avatarUrl?.trim() || "/avatars/politician-1.svg";
+  transaction(() => {
+    upsertUser({
+      id: userId,
+      phone: normalizedPhone,
+      password: input.password,
+      role: "politician",
+      name: input.name.trim(),
+      nickname: uniqueProfileNickname(input.name),
+      gender: "other",
+      ageGroup: "40대",
+      region: input.region.trim(),
+      incomeLevel: "밝히고 싶지 않음",
+      avatarUrl
+    });
+    run(
+      `insert into politicians (id, user_id, name, party, role_title, region, avatar_url, online, status, tags, created_at, updated_at)
+       values ($id, $userId, $name, $party, $roleTitle, $region, $avatarUrl, 0, '', $tags, $now, $now)`,
+      {
+        $id: politicianId,
+        $userId: userId,
+        $name: input.name.trim(),
+        $party: input.party.trim(),
+        $roleTitle: input.roleTitle.trim(),
+        $region: input.region.trim(),
+        $avatarUrl: avatarUrl,
+        $tags: JSON.stringify(input.tags?.map((tag) => tag.trim()).filter(Boolean) ?? []),
+        $now: now()
+      }
+    );
+  });
+
+  return listPoliticians().find((politician) => politician.id === politicianId)!;
+}
+
+export function updateProfileAvatar(userId: string, avatarUrl: string) {
+  transaction(() => {
+    run("update profiles set avatar_url = $avatarUrl, updated_at = $now where id = $userId", {
+      $avatarUrl: avatarUrl,
+      $now: now(),
+      $userId: userId
+    });
+    run("update politicians set avatar_url = $avatarUrl, updated_at = $now where user_id = $userId", {
+      $avatarUrl: avatarUrl,
+      $now: now(),
+      $userId: userId
+    });
+  });
+  const profile = getUserProfile(userId);
+  if (!profile) throw new Error("사용자 프로필을 찾을 수 없습니다.");
+  return profile;
+}
+
+export function updatePoliticianAvatar(politicianId: string, avatarUrl: string, user: UserProfile) {
+  assertUserRole(user, "admin");
+  const politician = get<PoliticianRow>(
+    "select id, user_id, name, party, role_title, region, avatar_url, online, status, tags from politicians where id = $id and user_id is not null",
+    { $id: politicianId }
+  );
+  if (!politician) throw new Error("정치인 계정을 찾을 수 없습니다.");
+  transaction(() => {
+    run("update politicians set avatar_url = $avatarUrl, updated_at = $now where id = $id", {
+      $avatarUrl: avatarUrl,
+      $now: now(),
+      $id: politicianId
+    });
+    if (politician.user_id) {
+      run("update profiles set avatar_url = $avatarUrl, updated_at = $now where id = $userId", {
+        $avatarUrl: avatarUrl,
+        $now: now(),
+        $userId: politician.user_id
+      });
+    }
+  });
+  return listPoliticians().find((item) => item.id === politicianId)!;
 }
 
 function mapOption(row: OptionRow, politicianIds: string[] = []): IssueOption {
@@ -1023,19 +1141,18 @@ export function recordIssueView(issueId: string, userId?: string | null) {
 }
 
 export function getMyVoteStatus(issueId: string, userId?: string) {
-  if (!userId) return { optionId: null, canceled: false };
+  if (!userId) return { optionId: null, canceled: false, canceledOptionId: null };
   const optionId =
     get<{ issue_option_id: string }>("select issue_option_id from issue_votes where issue_id = $issueId and user_id = $userId", {
       $issueId: issueId,
       $userId: userId
     })?.issue_option_id ?? null;
-  const canceled = Boolean(
-    get<{ issue_id: string }>("select issue_id from issue_vote_cancellations where issue_id = $issueId and user_id = $userId", {
+  const cancellation =
+    get<{ issue_id: string; issue_option_id: string | null }>("select issue_id, issue_option_id from issue_vote_cancellations where issue_id = $issueId and user_id = $userId", {
       $issueId: issueId,
       $userId: userId
-    })
-  );
-  return { optionId, canceled };
+    }) ?? null;
+  return { optionId, canceled: Boolean(cancellation), canceledOptionId: cancellation?.issue_option_id ?? null };
 }
 
 export function getMyVote(issueId: string, userId?: string) {
@@ -1110,10 +1227,10 @@ export function cancelIssueVote(issueId: string, userId: string) {
 
     run("delete from issue_votes where issue_id = $issueId and user_id = $userId", { $issueId: issueId, $userId: userId });
     run(
-      `insert into issue_vote_cancellations (issue_id, user_id, canceled_at)
-       values ($issueId, $userId, $now)
-       on conflict(issue_id, user_id) do update set canceled_at = excluded.canceled_at`,
-      { $issueId: issueId, $userId: userId, $now: now() }
+      `insert into issue_vote_cancellations (issue_id, user_id, issue_option_id, canceled_at)
+       values ($issueId, $userId, $optionId, $now)
+       on conflict(issue_id, user_id) do update set issue_option_id = excluded.issue_option_id, canceled_at = excluded.canceled_at`,
+      { $issueId: issueId, $userId: userId, $optionId: existing.issue_option_id, $now: now() }
     );
     syncIssueCounters(issueId);
   });
@@ -1142,6 +1259,7 @@ function isEdited(createdAt: string, updatedAt: string) {
 export function listComments(issueId: string, sort: CommentSort, currentUserId?: string) {
   const rows = all<CommentRow>(
     `select c.*,
+      p.name,
       p.nickname,
       p.avatar_url,
       u.role,
@@ -1162,7 +1280,7 @@ export function listComments(issueId: string, sort: CommentSort, currentUserId?:
       parentId: comment.parent_id,
       author: {
         id: comment.user_id,
-        nickname: comment.nickname ?? "탈퇴한 사용자",
+        nickname: comment.role === "politician" ? comment.name ?? "정치인" : comment.nickname ?? "탈퇴한 사용자",
         role: comment.role ?? undefined,
         avatarUrl: comment.avatar_url ?? undefined
       },
@@ -1260,12 +1378,17 @@ function mapMessage(row: MessageRow): ChatMessage {
 
 export function listChatRooms(userId: string) {
   const politicians = new Map(listPoliticians().map((politician) => [politician.id, politician]));
-  return all<ChatRow>("select * from chats where user_id = $userId order by last_message_at desc", { $userId: userId }).map((room) =>
-    mapRoom(room, politicians.get(room.politician_id))
-  );
+  return all<ChatRow>("select * from chats where user_id = $userId order by last_message_at desc", { $userId: userId })
+    .map((room) => {
+      const politician = politicians.get(room.politician_id);
+      return politician ? mapRoom(room, politician) : null;
+    })
+    .filter((room): room is ChatRoom => Boolean(room));
 }
 
 export function createOrGetChatRoom(userId: string, politicianId: string) {
+  const politician = listPoliticians().find((item) => item.id === politicianId);
+  if (!politician) throw new Error("정치인 계정을 찾을 수 없습니다.");
   let room = get<ChatRow>("select * from chats where user_id = $userId and politician_id = $politicianId", { $userId: userId, $politicianId: politicianId });
   if (!room) {
     const id = randomUUID();
@@ -1276,8 +1399,14 @@ export function createOrGetChatRoom(userId: string, politicianId: string) {
     );
     room = get<ChatRow>("select * from chats where id = $id", { $id: id });
   }
-  const politician = listPoliticians().find((item) => item.id === politicianId);
   return mapRoom(room!, politician);
+}
+
+export function deleteChatRoom(roomId: string, user: UserProfile) {
+  const room = get<ChatRow>("select * from chats where id = $id", { $id: roomId });
+  if (!room) throw new Error("채팅방을 찾을 수 없습니다.");
+  if (room.user_id !== user.id && user.role !== "admin") throw new Error("채팅방 삭제 권한이 없습니다.");
+  run("delete from chats where id = $id", { $id: roomId });
 }
 
 export function listMessages(roomId: string, user: UserProfile) {
@@ -1471,11 +1600,14 @@ export function getMyActivity(userId: string) {
     author_nickname: string;
     liked_at: string;
   }>(
-    `select c.id, c.issue_id, i.slug as issue_slug, i.title as issue_title, c.body, p.nickname as author_nickname, l.created_at as liked_at
+    `select c.id, c.issue_id, i.slug as issue_slug, i.title as issue_title, c.body,
+      case when u.role = 'politician' then p.name else p.nickname end as author_nickname,
+      l.created_at as liked_at
      from comment_likes l
      join comments c on c.id = l.comment_id
      join issues i on i.id = c.issue_id
      left join profiles p on p.id = c.user_id
+     left join users u on u.id = c.user_id
      where l.user_id = $userId
      order by l.created_at desc`,
     { $userId: userId }

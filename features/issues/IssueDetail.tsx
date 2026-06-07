@@ -28,7 +28,7 @@ export function IssueDetail({ issueId }: { issueId: string }) {
 }
 
 function IssueDetailContent({ issueId }: { issueId: string }) {
-  const { issue, loading, error, reload, selectedOptionId, voteCanceled, submitVote, voting } = useIssueDetail(issueId);
+  const { issue, loading, error, reload, selectedOptionId, revealedOptionId, voteCanceled, submitVote, voting } = useIssueDetail(issueId);
   const user = useAuthStore((state) => state.user);
   const [pendingOptionId, setPendingOptionId] = useState<string | null>(null);
   const [voteError, setVoteError] = useState("");
@@ -51,7 +51,9 @@ function IssueDetailContent({ issueId }: { issueId: string }) {
 
   const selectedOption = issue.options.find((option) => option.id === selectedOptionId);
   const pendingOption = issue.options.find((option) => option.id === pendingOptionId);
-  const selectedStats = selectedOption ? issue.statistics[selectedOption.id] : undefined;
+  const revealedOption = issue.options.find((option) => option.id === revealedOptionId);
+  const revealedStats = revealedOption ? issue.statistics[revealedOption.id] : undefined;
+  const statsUnlocked = Boolean(selectedOptionId || voteCanceled || revealedOptionId);
   const voteLocked = Boolean(selectedOptionId) || voteCanceled;
 
   const requestVote = (optionId: string) => {
@@ -146,6 +148,7 @@ function IssueDetailContent({ issueId }: { issueId: string }) {
                 option={option}
                 selected={selectedOptionId === option.id}
                 disabled={!user || voting || voteLocked}
+                showStats={statsUnlocked}
                 actionLabel={voteLocked ? (selectedOptionId === option.id ? "선택한 의견" : "선택 불가") : "탭해서 의견 선택"}
                 onSelect={() => requestVote(option.id)}
               />
@@ -154,16 +157,21 @@ function IssueDetailContent({ issueId }: { issueId: string }) {
         </div>
       </section>
 
-      {selectedOption ? (
+      {statsUnlocked && revealedOption ? (
         <div className="space-y-5 px-5">
-          <AnalysisPanel issue={issue} option={selectedOption} />
-          {selectedStats ? (
+          <AnalysisPanel issue={issue} option={revealedOption} />
+          {voteCanceled ? (
+            <p className="rounded-2xl bg-slate-100 p-3 text-sm font-bold text-slate-500">
+              마이페이지에서 의견 선택을 취소했지만, 한 번 공개된 통계는 계속 볼 수 있습니다.
+            </p>
+          ) : null}
+          {revealedStats ? (
             <section className="space-y-4">
               <div>
                 <h2 className="text-xl font-black text-vote-ink">선택한 사람들의 통계</h2>
                 <p className="mt-1 text-sm font-medium text-slate-500">실제 투표자의 익명화된 집계 통계입니다.</p>
               </div>
-              <DemographicCharts statistics={selectedStats} />
+              <DemographicCharts statistics={revealedStats} />
             </section>
           ) : null}
         </div>

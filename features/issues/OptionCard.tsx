@@ -9,12 +9,14 @@ export function OptionCard({
   option,
   selected,
   disabled,
+  showStats = true,
   actionLabel = "탭해서 의견 선택",
   onSelect
 }: {
   option: IssueOption;
   selected: boolean;
   disabled?: boolean;
+  showStats?: boolean;
   actionLabel?: string;
   onSelect: () => void;
 }) {
@@ -41,7 +43,7 @@ export function OptionCard({
           {selected ? <CheckCircle2 className="h-6 w-6 shrink-0" /> : null}
         </div>
         <div className="flex items-center justify-between text-xs font-bold text-white/80">
-          <span>현재 {option.percent}% 선택</span>
+          <span>{showStats ? `현재 ${option.percent}% 선택` : "선택 후 통계 공개"}</span>
           <span>{actionLabel}</span>
         </div>
       </div>
