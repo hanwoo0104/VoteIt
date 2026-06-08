@@ -10,6 +10,7 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "db:reset": "node scripts/reset-sqlite.mjs",
+    "seed:dummy-users": "node --experimental-sqlite scripts/create-dummy-users.mjs",
     "seed:demo-user": "node scripts/print-demo-accounts.mjs",
     "seed:admin-user": "node scripts/print-demo-accounts.mjs"
   },
