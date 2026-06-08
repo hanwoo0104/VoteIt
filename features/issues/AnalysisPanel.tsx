@@ -78,7 +78,6 @@ export function AnalysisPanel({ issue, option }: { issue: Issue; option: IssueOp
           </div>
           <div>
             <p className="text-base font-black">AI 의견 분석 결과</p>
-            <p className="text-xs font-semibold text-white/58">ChatGPT 스타일 데모 출력</p>
           </div>
         </div>
       </div>

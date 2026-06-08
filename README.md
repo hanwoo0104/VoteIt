@@ -21,7 +21,21 @@ npm install
 npm run dev
 ```
 
-기본 주소는 `http://localhost:3000`입니다. 포트 충돌 시:
+기본 주소는 `http://localhost:3000`입니다. `npm run dev`는 LAN 테스트를 위해 `0.0.0.0`에 바인딩됩니다.
+
+같은 네트워크의 휴대폰/다른 기기에서는 Mac의 실제 IP로 접속합니다.
+
+```text
+http://내_IP:3000
+```
+
+로컬 PC 안에서만 띄우고 싶다면:
+
+```bash
+npm run dev:local
+```
+
+포트 충돌 시:
 
 ```bash
 npm run dev -- -H 127.0.0.1 -p 3001
@@ -64,6 +78,8 @@ VOTEIT_SQLITE_PATH=data/voteit.sqlite
 OPENAI_API_KEY=
 OPENAI_MODEL=gpt-4.1-mini
 ```
+
+`npm run start`로 production 모드를 로컬 IP에서 테스트할 때 로그인 세션이 풀리면 `VOTEIT_SECURE_COOKIES=false`를 사용하세요. HTTPS 배포/Vercel에서는 자동으로 secure cookie가 켜집니다.
 
 ## Auth And OTP
 
@@ -134,4 +150,3 @@ npm run typecheck
 npm run lint
 npm run build
 ```
-

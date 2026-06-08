@@ -10,12 +10,14 @@ export function AppShell({
   className,
   showHeader = true,
   showBottomNav = true,
+  safeBottom = true,
   wide = false
 }: {
   children: React.ReactNode;
   className?: string;
   showHeader?: boolean;
   showBottomNav?: boolean;
+  safeBottom?: boolean;
   wide?: boolean;
 }) {
   return (
@@ -25,7 +27,7 @@ export function AppShell({
         initial={{ opacity: 0, y: 14 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ type: "spring", stiffness: 280, damping: 30 }}
-        className={cn("safe-bottom px-5", className)}
+        className={cn(safeBottom && "safe-bottom", "px-5", className)}
       >
         {children}
       </motion.main>

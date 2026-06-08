@@ -47,8 +47,10 @@ function ChatContent({ initialRoomId }: { initialRoomId: string }) {
   const [deletingRoomId, setDeletingRoomId] = useState("");
   const [loading, setLoading] = useState(true);
   const [messageLoading, setMessageLoading] = useState(false);
+  const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
+  const sendingRef = useRef(false);
 
   const activeRoom = rooms.find((room) => room.id === activeRoomId);
   const activePolitician = activeRoom?.politician;
@@ -158,7 +160,9 @@ function ChatContent({ initialRoomId }: { initialRoomId: string }) {
   };
 
   const submit = async () => {
-    if (!draft.trim() || !activeRoom || !user) return;
+    if (sendingRef.current || !draft.trim() || !activeRoom || !user) return;
+    sendingRef.current = true;
+    setSending(true);
     const body = draft.trim();
     const optimistic: ChatMessage = {
       id: `optimistic-${crypto.randomUUID()}`,
@@ -181,6 +185,9 @@ function ChatContent({ initialRoomId }: { initialRoomId: string }) {
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "메시지 전송에 실패했습니다.");
       setMessages((current) => current.filter((message) => message.id !== optimistic.id));
+    } finally {
+      sendingRef.current = false;
+      setSending(false);
     }
   };
 
@@ -207,7 +214,7 @@ function ChatContent({ initialRoomId }: { initialRoomId: string }) {
   if (!user) return null;
 
   return (
-    <AppShell showHeader={false} className="flex min-h-dvh flex-col px-0 pb-0">
+    <AppShell showHeader={false} showBottomNav={!activeRoomId} safeBottom={!activeRoomId} className="flex min-h-dvh flex-col px-0 pb-0">
       {!activeRoomId ? (
         <ChatListHeader newChatOpen={newChatOpen} onBack={() => setNewChatOpen(false)} onNewChat={() => setNewChatOpen(true)} />
       ) : null}
@@ -230,6 +237,7 @@ function ChatContent({ initialRoomId }: { initialRoomId: string }) {
           draft={draft}
           setDraft={setDraft}
           submit={submit}
+          sending={sending}
           messageLoading={messageLoading}
           onBack={backToList}
           bottomRef={bottomRef}
@@ -432,6 +440,7 @@ function ChatRoomView({
   draft,
   setDraft,
   submit,
+  sending,
   messageLoading,
   onBack,
   bottomRef
@@ -444,10 +453,13 @@ function ChatRoomView({
   draft: string;
   setDraft: (value: string) => void;
   submit: () => void;
+  sending: boolean;
   messageLoading: boolean;
   onBack: () => void;
   bottomRef: RefObject<HTMLDivElement | null>;
 }) {
+  const composingRef = useRef(false);
+
   if (!activeRoom || !activePolitician) {
     return (
       <div className="px-5 py-5">
@@ -512,18 +524,28 @@ function ChatRoomView({
         <div ref={bottomRef} />
       </div>
 
-      <div className="border-t border-slate-100 bg-white px-5 pb-[calc(92px+env(safe-area-inset-bottom))] pt-3">
+      <div className="border-t border-slate-100 bg-white px-5 pb-[calc(10px+env(safe-area-inset-bottom))] pt-3">
         <div className="flex gap-2">
           <Input
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
+            onCompositionStart={() => {
+              composingRef.current = true;
+            }}
+            onCompositionEnd={() => {
+              composingRef.current = false;
+            }}
             onKeyDown={(event) => {
-              if (event.key === "Enter") submit();
+              const nativeEvent = event.nativeEvent as KeyboardEvent & { isComposing?: boolean };
+              if (event.key !== "Enter" || event.shiftKey) return;
+              if (nativeEvent.isComposing || composingRef.current) return;
+              event.preventDefault();
+              submit();
             }}
             placeholder="메시지 보내기"
             className="rounded-full bg-slate-50"
           />
-          <Button size="icon" variant="red" onClick={submit} disabled={!draft.trim()}>
+          <Button size="icon" variant="red" onClick={submit} disabled={!draft.trim() || sending}>
             <Send className="h-5 w-5" />
           </Button>
         </div>

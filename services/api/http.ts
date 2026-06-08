@@ -1,6 +1,8 @@
 export async function apiFetch<T>(url: string, init?: RequestInit): Promise<T> {
   const isFormData = init?.body instanceof FormData;
   const response = await fetch(url, {
+    credentials: "same-origin",
+    cache: "no-store",
     ...init,
     headers: isFormData
       ? init?.headers

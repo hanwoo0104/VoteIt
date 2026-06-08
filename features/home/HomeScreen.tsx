@@ -10,6 +10,7 @@ import { EmptyState, ErrorState } from "@/components/ui/state";
 import { RequireAuth } from "@/features/auth/RequireAuth";
 import { useIssues } from "@/hooks/useIssues";
 import { formatNumber } from "@/lib/utils";
+import type { IssueOption } from "@/types";
 
 export function HomeScreen() {
   return (
@@ -50,10 +51,10 @@ function AuthenticatedHome() {
                   initial={{ opacity: 0, x: -12 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: 0.08 * index, type: "spring", stiffness: 260, damping: 24 }}
-                  className="rounded-lg px-4 py-3 text-center text-[13px] font-medium leading-snug text-white shadow-sm"
+                  className="rounded-lg px-4 py-3 text-center text-[14px] font-black leading-snug text-white shadow-sm"
                   style={{ background: option.gradient }}
                 >
-                  {option.shortText}
+                  {opinionLabel(option)}
                 </motion.div>
               ))}
             </div>
@@ -112,6 +113,10 @@ function AuthenticatedHome() {
       </section>
     </AppShell>
   );
+}
+
+function opinionLabel(option: IssueOption) {
+  return option.title.trim() || "의견";
 }
 
 function HomeActionCard({

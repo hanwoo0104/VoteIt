@@ -1,5 +1,5 @@
-const CACHE_NAME = "voteit-pwa-v2";
-const OFFLINE_URLS = ["/", "/manifest.webmanifest", "/favicon.png", "/brand/voteit-logo.png"];
+const CACHE_NAME = "voteit-pwa-v5";
+const OFFLINE_URLS = ["/manifest.webmanifest", "/favicon.png", "/brand/voteit-logo.png"];
 const STATIC_CACHE_PATHS = new Set(["/manifest.webmanifest", "/favicon.png", "/brand/voteit-logo.png"]);
 
 function isSameOrigin(requestUrl) {
@@ -17,16 +17,8 @@ function isNextRuntimeRequest(pathname) {
 async function networkFirst(request) {
   try {
     const response = await fetch(request);
-    if (response.ok) {
-      const cache = await caches.open(CACHE_NAME);
-      cache.put(request, response.clone());
-    }
     return response;
   } catch {
-    const cached = await caches.match(request);
-    if (cached) return cached;
-    const offline = await caches.match("/");
-    if (offline) return offline;
     return new Response("보팃을 불러오지 못했습니다. 네트워크 상태를 확인해 주세요.", {
       status: 503,
       headers: { "Content-Type": "text/plain; charset=utf-8" }
@@ -71,6 +63,12 @@ self.addEventListener("activate", (event) => {
   );
 });
 
+self.addEventListener("message", (event) => {
+  if (event.data?.type === "SKIP_WAITING") {
+    self.skipWaiting();
+  }
+});
+
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") {
     return;
@@ -86,7 +84,7 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  if (STATIC_CACHE_PATHS.has(url.pathname) || url.pathname.startsWith("/_next/static/")) {
+  if (STATIC_CACHE_PATHS.has(url.pathname)) {
     event.respondWith(staleWhileRevalidate(event.request));
   }
 });

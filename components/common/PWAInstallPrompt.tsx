@@ -11,6 +11,7 @@ interface BeforeInstallPromptEvent extends Event {
 }
 
 const DISMISS_KEY = "voteit-pwa-install-guide-dismissed";
+const UPDATE_RELOAD_KEY = "voteit-sw-updated-once";
 
 function isStandalonePwa() {
   if (typeof window === "undefined") return false;
@@ -29,8 +30,40 @@ export function PWAInstallPrompt() {
   const [ios, setIos] = useState(false);
 
   useEffect(() => {
+    let controllerChangeHandler: (() => void) | null = null;
+
     if (process.env.NODE_ENV === "production" && "serviceWorker" in navigator) {
-      navigator.serviceWorker.register("/sw.js", { updateViaCache: "none" }).catch(() => undefined);
+      let refreshing = false;
+
+      const activateWaitingWorker = (registration: ServiceWorkerRegistration) => {
+        registration.waiting?.postMessage({ type: "SKIP_WAITING" });
+      };
+
+      controllerChangeHandler = () => {
+        if (refreshing || window.sessionStorage.getItem(UPDATE_RELOAD_KEY) === "true") return;
+        refreshing = true;
+        window.sessionStorage.setItem(UPDATE_RELOAD_KEY, "true");
+        window.location.reload();
+      };
+
+      navigator.serviceWorker.addEventListener("controllerchange", controllerChangeHandler);
+
+      navigator.serviceWorker
+        .register("/sw.js", { updateViaCache: "none" })
+        .then((registration) => {
+          activateWaitingWorker(registration);
+          registration.update().catch(() => undefined);
+          registration.addEventListener("updatefound", () => {
+            const worker = registration.installing;
+            if (!worker) return;
+            worker.addEventListener("statechange", () => {
+              if (worker.state === "installed" && navigator.serviceWorker.controller) {
+                activateWaitingWorker(registration);
+              }
+            });
+          });
+        })
+        .catch(() => undefined);
     }
 
     setIos(isIos());
@@ -59,6 +92,9 @@ export function PWAInstallPrompt() {
     return () => {
       window.removeEventListener("beforeinstallprompt", installHandler);
       window.removeEventListener("appinstalled", installedHandler);
+      if (controllerChangeHandler) {
+        navigator.serviceWorker.removeEventListener("controllerchange", controllerChangeHandler);
+      }
     };
   }, []);
 

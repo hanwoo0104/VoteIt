@@ -1,4 +1,4 @@
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { NextResponse } from "next/server";
 import { createSession, deleteSession, getUserBySessionToken } from "@/services/sqlite/db";
 import type { UserProfile } from "@/types";
@@ -16,13 +16,23 @@ export async function requireCurrentUser() {
   return user;
 }
 
+async function shouldUseSecureCookie() {
+  if (process.env.VOTEIT_SECURE_COOKIES === "true") return true;
+  if (process.env.VOTEIT_SECURE_COOKIES === "false") return false;
+  if (process.env.VERCEL === "1") return true;
+
+  const headerStore = await headers();
+  const forwardedProto = headerStore.get("x-forwarded-proto")?.split(",")[0]?.trim().toLowerCase();
+  return forwardedProto === "https";
+}
+
 export async function signInResponse(userId: string, body: Record<string, unknown>) {
   const session = createSession(userId);
   const response = NextResponse.json(body);
   response.cookies.set(SESSION_COOKIE, session.token, {
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    secure: await shouldUseSecureCookie(),
     path: "/",
     expires: new Date(session.expiresAt)
   });
@@ -36,10 +46,9 @@ export async function signOutResponse() {
   response.cookies.set(SESSION_COOKIE, "", {
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    secure: await shouldUseSecureCookie(),
     path: "/",
     maxAge: 0
   });
   return response;
 }
-
