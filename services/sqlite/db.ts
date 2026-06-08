@@ -1378,7 +1378,14 @@ function mapMessage(row: MessageRow): ChatMessage {
 
 export function listChatRooms(userId: string) {
   const politicians = new Map(listPoliticians().map((politician) => [politician.id, politician]));
-  return all<ChatRow>("select * from chats where user_id = $userId order by last_message_at desc", { $userId: userId })
+  return all<ChatRow>(
+    `select c.*
+     from chats c
+     left join politicians p on p.id = c.politician_id
+     where c.user_id = $userId or p.user_id = $userId
+     order by c.last_message_at desc`,
+    { $userId: userId }
+  )
     .map((room) => {
       const politician = politicians.get(room.politician_id);
       return politician ? mapRoom(room, politician) : null;
@@ -1409,25 +1416,45 @@ export function deleteChatRoom(roomId: string, user: UserProfile) {
   run("delete from chats where id = $id", { $id: roomId });
 }
 
+function canAccessChatRoom(room: ChatRow, user: UserProfile) {
+  if (room.user_id === user.id || user.role === "admin") return true;
+  const politician = get<PoliticianRow>("select * from politicians where id = $id", { $id: room.politician_id });
+  return politician?.user_id === user.id;
+}
+
 export function listMessages(roomId: string, user: UserProfile) {
   const room = get<ChatRow>("select * from chats where id = $id", { $id: roomId });
-  if (!room || (room.user_id !== user.id && user.role !== "admin")) throw new Error("채팅방 접근 권한이 없습니다.");
+  if (!room || !canAccessChatRoom(room, user)) throw new Error("채팅방 접근 권한이 없습니다.");
   return all<MessageRow>("select * from chat_messages where room_id = $roomId order by created_at asc", { $roomId: roomId }).map(mapMessage);
 }
 
-export function sendMessage(roomId: string, senderId: string, body: string) {
-  transaction(() => {
+export function sendMessage(roomId: string, user: UserProfile, body: string) {
+  const trimmed = body.trim();
+  if (!trimmed) throw new Error("메시지를 입력해 주세요.");
+
+  const savedId = transaction(() => {
+    const room = get<ChatRow>("select * from chats where id = $id", { $id: roomId });
+    if (!room || !canAccessChatRoom(room, user)) throw new Error("채팅방 접근 권한이 없습니다.");
+
+    const messageId = randomUUID();
+    const timestamp = now();
     run(
       `insert into chat_messages (id, room_id, sender_id, body, read, created_at)
        values ($id, $roomId, $senderId, $body, 0, $now)`,
-      { $id: randomUUID(), $roomId: roomId, $senderId: senderId, $body: body.trim(), $now: now() }
+      { $id: messageId, $roomId: roomId, $senderId: user.id, $body: trimmed, $now: timestamp }
     );
-    run("update chats set last_message = $body, last_message_at = $now, unread_count = unread_count + 1, updated_at = $now where id = $roomId", {
-      $body: body.trim(),
-      $now: now(),
+    run("update chats set last_message = $body, last_message_at = $now, unread_count = case when user_id = $senderId then unread_count else unread_count + 1 end, updated_at = $now where id = $roomId", {
+      $body: trimmed,
+      $now: timestamp,
+      $senderId: user.id,
       $roomId: roomId
     });
+    return messageId;
   });
+
+  const saved = get<MessageRow>("select * from chat_messages where id = $id", { $id: savedId });
+  if (!saved) throw new Error("메시지 저장에 실패했습니다.");
+  return mapMessage(saved);
 }
 
 export function markChatRead(roomId: string, readerId: string) {

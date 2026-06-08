@@ -21,7 +21,7 @@ export async function fetchMessages(roomId: string) {
 }
 
 export async function sendChatMessage(roomId: string, _senderId: string, body: string) {
-  await apiFetch<{ ok: true }>(`/api/chats/${encodeURIComponent(roomId)}/messages`, {
+  return apiFetch<ChatMessage>(`/api/chats/${encodeURIComponent(roomId)}/messages`, {
     method: "POST",
     body: JSON.stringify({ body })
   });

@@ -178,10 +178,15 @@ function ChatContent({ initialRoomId }: { initialRoomId: string }) {
     setDraft("");
 
     try {
-      await sendChatMessage(activeRoom.id, user.id, body);
-      const loadedMessages = await fetchMessages(activeRoom.id);
-      setMessages(loadedMessages);
-      await load(true);
+      const savedMessage = await sendChatMessage(activeRoom.id, user.id, body);
+      setMessages((current) => current.map((message) => (message.id === optimistic.id ? savedMessage : message)));
+      setRooms((current) =>
+        current.map((room) =>
+          room.id === activeRoom.id
+            ? { ...room, lastMessage: savedMessage.body, lastMessageAt: savedMessage.createdAt }
+            : room
+        )
+      );
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "메시지 전송에 실패했습니다.");
       setMessages((current) => current.filter((message) => message.id !== optimistic.id));

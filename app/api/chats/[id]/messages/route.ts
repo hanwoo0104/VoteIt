@@ -20,10 +20,8 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     const user = await requireCurrentUser();
     const { id } = await context.params;
     const body = await request.json();
-    sendMessage(id, user.id, String(body.body ?? ""));
-    return NextResponse.json({ ok: true });
+    return NextResponse.json(sendMessage(id, user, String(body.body ?? "")));
   } catch (error) {
     return authError(error);
   }
 }
-
