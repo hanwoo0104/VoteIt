@@ -18,13 +18,13 @@ export const metadata: Metadata = {
   icons: {
     icon: [
       {
-        url: "/brand/voteit-logo.png",
+        url: "/favicon.png",
         type: "image/png",
-        sizes: "2700x1082"
+        sizes: "1024x1024"
       }
     ],
-    shortcut: "/brand/voteit-logo.png",
-    apple: "/brand/voteit-logo.png"
+    shortcut: "/favicon.png",
+    apple: "/favicon.png"
   }
 };
 
